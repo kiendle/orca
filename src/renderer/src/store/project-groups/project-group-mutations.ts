@@ -51,7 +51,7 @@ export function createProjectGroupMutationActions(
         const ownedGroup = projectGroupWithFetchedOwner(group, target)
         const ownerHostId = getProjectGroupHostId(ownedGroup)
         set((s) => {
-          // The change notification can load this group before the create response arrives.
+          // An overlapping catalog refresh may have already inserted a newer copy.
           if (
             s.projectGroups.some(
               (existing) =>
