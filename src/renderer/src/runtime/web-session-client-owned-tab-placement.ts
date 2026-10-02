@@ -4,6 +4,7 @@ import {
   pushRecentTabId,
   sanitizeRecentTabIds
 } from '../store/slices/tab-group-state'
+import { rekeyTabClusterMembers } from '../store/slices/tabs/tab-cluster-model'
 
 /** A snapshot tab the client has not placed yet, plus the group it should join. */
 export type ClientOwnedAdoptedTab = {
@@ -107,8 +108,12 @@ export function reconcileClientOwnedTabPlacement(
             ...group,
             tabOrder: group.tabOrder.map(rekeyTabId),
             activeTabId: group.activeTabId ? rekeyTabId(group.activeTabId) : group.activeTabId,
-            recentTabIds: (group.recentTabIds ?? []).map(rekeyTabId)
+            recentTabIds: (group.recentTabIds ?? []).map(rekeyTabId),
+            tabClusters: rekeyTabClusterMembers(group.tabClusters, input.rekeyedTabIds)
           }
+    if (rekeyed !== group && !rekeyed.tabClusters) {
+      delete rekeyed.tabClusters
+    }
     working.set(group.id, {
       group: rekeyed,
       tabOrder: rekeyed.tabOrder.filter((tabId) => input.validUnifiedTabIds.has(tabId))

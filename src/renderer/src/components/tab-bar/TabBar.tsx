@@ -8,6 +8,11 @@ import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-control
 import { useTabBarItemProjection } from './use-tab-bar-item-projection'
 import { renderTabBarSurface } from './tab-bar-surface'
 import { useActiveClientHostedBrowserRowId } from '@/lib/pane-manager/client-hosted-browser-row-state'
+import { useAppStore } from '@/store'
+import { useTabBarClusterInteractions } from './use-tab-bar-cluster-interactions'
+import type { TabGroup } from '../../../../shared/tab-types'
+
+const EMPTY_GROUPS: readonly TabGroup[] = []
 
 function TabBarInner(props: TabBarProps): React.JSX.Element {
   const {
@@ -23,6 +28,8 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     onPinFile
   } = props
   const runtime = useTabBarRuntimeModel({ worktreeId, groupId })
+  const groups = useAppStore((state) => state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS)
+  const group = groups.find((item) => item.id === runtime.resolvedGroupId) ?? null
   const createMenu = useTabBarCreateMenuController({
     worktreeId,
     resolvedGroupId: runtime.resolvedGroupId,
@@ -50,7 +57,17 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     unifiedTabs: runtime.unifiedTabs,
     unifiedTabByVisibleId: runtime.unifiedTabByVisibleId,
     generatedTabTitlesEnabled: runtime.generatedTabTitlesEnabled,
-    statusByRelativePath: runtime.statusByRelativePath
+    statusByRelativePath: runtime.statusByRelativePath,
+    group
+  })
+  const clusterInteractions = useTabBarClusterInteractions({
+    props,
+    groupId: runtime.resolvedGroupId,
+    group,
+    groups,
+    allItems: itemProjection.orderedItems,
+    visibleItems: itemProjection.visibleItems,
+    activeVisibleTabId: itemProjection.activeVisibleTabId
   })
   const togglePinned = (item: TabBarItem): void => {
     // pinTab/unpinTab mirror the change to the host for remote-server tabs.
@@ -89,6 +106,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     runtime,
     createMenu,
     itemProjection,
+    clusterInteractions,
     tabStripNavigation,
     tabStripDragScroll,
     activeClientHostedBrowserRowId,

@@ -193,6 +193,7 @@ export function buildMirroredHostGroups({
       worktreeId,
       tabOrder,
       activeTabId,
+      ...(existing?.tabClusters ? { tabClusters: existing.tabClusters } : {}),
       recentTabIds: activeTabId
         ? pushRecentTabId(
             mapHostRecentTabIds(hostGroup.recentTabIds, hostToLocalTabId, tabOrder),

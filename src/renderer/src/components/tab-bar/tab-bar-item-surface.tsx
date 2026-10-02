@@ -15,9 +15,15 @@ import { getTabDragLabel, type TabBarItem } from './tab-bar-item-model'
 import type { TabBarProps } from './tab-bar-props'
 import type { TabBarRuntimeModel } from './use-tab-bar-runtime-model'
 import { clearClientHostedBrowserRowSelection } from '@/lib/pane-manager/client-hosted-browser-row-state'
+import type { TabCluster } from '../../../../shared/tab-types'
+import type { TabBarClusterInteractions } from './use-tab-bar-cluster-interactions'
+import type { TabStripInteractionProps } from './tab-strip-selection'
 
 export function renderTabBarItems({
   items,
+  allItems = items,
+  clusterByUnifiedTabId,
+  clusterInteractions,
   props,
   runtime,
   dropIndicatorByVisibleId,
@@ -26,6 +32,9 @@ export function renderTabBarItems({
   togglePinned
 }: {
   items: TabBarItem[]
+  allItems?: readonly TabBarItem[]
+  clusterByUnifiedTabId?: ReadonlyMap<string, TabCluster>
+  clusterInteractions?: TabBarClusterInteractions
   props: TabBarProps
   runtime: TabBarRuntimeModel
   dropIndicatorByVisibleId: Map<string, DropIndicator>
@@ -84,7 +93,16 @@ export function renderTabBarItems({
     }
   }
 
-  return items.map((item, index) => {
+  const canonicalIndexByVisibleId = new Map(allItems.map((item, index) => [item.id, index]))
+  return items.map((item) => {
+    const index = canonicalIndexByVisibleId.get(item.id) ?? 0
+    const interactionProps: TabStripInteractionProps = {
+      clusterColor: clusterByUnifiedTabId?.get(item.unifiedTabId)?.color,
+      isHighlighted: clusterInteractions?.highlightedTabIds.has(item.unifiedTabId) ?? false,
+      onSelect: clusterInteractions
+        ? (modifiers) => clusterInteractions.selectTab(item.unifiedTabId, modifiers)
+        : undefined
+    }
     const dragData: TabDragItemData = {
       kind: 'tab',
       worktreeId,
@@ -121,16 +139,17 @@ export function renderTabBarItems({
       return (
         <SortableTab
           key={item.id}
+          {...interactionProps}
           tab={terminalTab}
           unifiedTabId={item.unifiedTabId}
           groupId={resolvedGroupId}
-          tabCount={items.length}
+          tabCount={allItems.length}
           canToggleViewMode={canToggleViewMode}
           isChatView={nativeChatEnabled && unifiedTabForItem?.viewMode === 'chat'}
           onToggleViewMode={
             unifiedTabForItem ? () => toggleTabViewMode(unifiedTabForItem.id) : undefined
           }
-          hasTabsToRight={index < items.length - 1}
+          hasTabsToRight={index < allItems.length - 1}
           hasTabsToLeft={index > 0}
           isActive={
             !clientHostedRowOwnsActiveState &&
@@ -158,6 +177,7 @@ export function renderTabBarItems({
       return (
         <BrowserTab
           key={item.id}
+          {...interactionProps}
           tab={item.data}
           isActive={
             !clientHostedRowOwnsActiveState &&
@@ -165,9 +185,9 @@ export function renderTabBarItems({
             activeBrowserTabId === item.id
           }
           isPinned={item.isPinned}
-          hasTabsToRight={index < items.length - 1}
+          hasTabsToRight={index < allItems.length - 1}
           hasTabsToLeft={index > 0}
-          tabCount={items.length}
+          tabCount={allItems.length}
           onActivate={() => activateRealTab(onActivateBrowserTab)(item.id)}
           onClose={() => onCloseBrowserTab?.(item.id)}
           onCloseOthers={() => onCloseOthers(item.id)}
@@ -201,6 +221,7 @@ export function renderTabBarItems({
       return (
         <EditorFileTab
           key={item.id}
+          {...interactionProps}
           file={simulatorFile}
           isActive={
             !clientHostedRowOwnsActiveState &&
@@ -208,9 +229,9 @@ export function renderTabBarItems({
             item.id === activeSimulatorTabId
           }
           isPinned={item.isPinned}
-          hasTabsToRight={index < items.length - 1}
+          hasTabsToRight={index < allItems.length - 1}
           hasTabsToLeft={index > 0}
-          tabCount={items.length}
+          tabCount={allItems.length}
           statusByRelativePath={statusByRelativePath}
           onActivate={() => activateRealTab(onActivateFile)(item.id)}
           onClose={() => onCloseFile?.(item.id)}
@@ -243,11 +264,12 @@ export function renderTabBarItems({
       return (
         <SortableTab
           key={item.id}
+          {...interactionProps}
           tab={structuredTab}
           unifiedTabId={item.unifiedTabId}
           groupId={resolvedGroupId}
-          tabCount={items.length}
-          hasTabsToRight={index < items.length - 1}
+          tabCount={allItems.length}
+          hasTabsToRight={index < allItems.length - 1}
           hasTabsToLeft={index > 0}
           isActive={
             !clientHostedRowOwnsActiveState &&
@@ -275,6 +297,7 @@ export function renderTabBarItems({
     return (
       <EditorFileTab
         key={item.id}
+        {...interactionProps}
         file={item.data}
         isActive={
           !clientHostedRowOwnsActiveState &&
@@ -282,9 +305,9 @@ export function renderTabBarItems({
           activeFileId === item.id
         }
         isPinned={item.isPinned}
-        hasTabsToRight={index < items.length - 1}
+        hasTabsToRight={index < allItems.length - 1}
         hasTabsToLeft={index > 0}
-        tabCount={items.length}
+        tabCount={allItems.length}
         statusByRelativePath={statusByRelativePath}
         onActivate={() => activateRealTab(onActivateFile)(item.id)}
         onClose={() => onCloseFile?.(item.id)}

@@ -1,6 +1,8 @@
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { collapseGroupLayout } from './tabs-layout'
 import { buildActiveSurfacePatch } from './tabs-surface'
+import { applyTransferredTabClusterMembership } from './tab-cluster-transfer'
+import { promoteClusterPreviewTabs } from './tabs-cluster-strip-actions'
 import {
   dedupeTabOrder,
   findGroupAndWorktree,
@@ -17,6 +19,18 @@ export function createTabsMoveActions(
 ): Pick<TabsSlice, 'moveUnifiedTabToGroup'> {
   return {
     moveUnifiedTabToGroup: (tabId, targetGroupId, opts) => {
+      if (opts?.clusterId) {
+        const state = get()
+        const foundTab = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+        const foundTarget = findGroupAndWorktree(state.groupsByWorktree, targetGroupId)
+        if (
+          foundTab &&
+          foundTarget?.worktreeId === foundTab.worktreeId &&
+          foundTarget.group.tabClusters?.some((cluster) => cluster.id === opts.clusterId)
+        ) {
+          promoteClusterPreviewTabs(get, foundTab.tab.groupId, [tabId])
+        }
+      }
       let moved = false
       set((state) => {
         const foundTab = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
@@ -52,29 +66,44 @@ export function createTabsMoveActions(
           (sourceGroup.recentTabIds ?? []).filter((id) => id !== tabId),
           sourceOrder
         )
+        const pinnedTabIds = new Set(
+          (state.unifiedTabsByWorktree[worktreeId] ?? [])
+            .filter((candidate) => candidate.isPinned)
+            .map((candidate) => candidate.id)
+        )
         const nextGroups = (state.groupsByWorktree[worktreeId] ?? []).map((group) => {
           if (group.id === sourceGroup.id) {
-            return {
-              ...group,
-              activeTabId:
-                group.activeTabId === tabId
-                  ? // Why: keep MRU-aware selection so the user lands on their previously-focused tab, not a visual neighbor.
-                    pickNextActiveTab(dedupedSourceGroupOrder, sourceGroup.recentTabIds, tabId)
-                  : group.activeTabId,
-              tabOrder: sourceOrder,
-              recentTabIds: sourceRecentTabIds
-            }
+            return applyTransferredTabClusterMembership(
+              {
+                ...group,
+                activeTabId:
+                  group.activeTabId === tabId
+                    ? // Why: keep MRU-aware selection so the user lands on their previously-focused tab, not a visual neighbor.
+                      pickNextActiveTab(dedupedSourceGroupOrder, sourceGroup.recentTabIds, tabId)
+                    : group.activeTabId,
+                tabOrder: sourceOrder,
+                recentTabIds: sourceRecentTabIds
+              },
+              tabId,
+              null,
+              pinnedTabIds
+            )
           }
           if (group.id === targetGroupId) {
             const sanitizedTargetRecent = sanitizeRecentTabIds(group.recentTabIds, targetOrder)
-            return {
-              ...group,
-              activeTabId: opts?.activate ? tabId : group.activeTabId,
-              tabOrder: targetOrder,
-              recentTabIds: opts?.activate
-                ? pushRecentTabId(sanitizedTargetRecent, tabId)
-                : sanitizedTargetRecent
-            }
+            return applyTransferredTabClusterMembership(
+              {
+                ...group,
+                activeTabId: opts?.activate ? tabId : group.activeTabId,
+                tabOrder: targetOrder,
+                recentTabIds: opts?.activate
+                  ? pushRecentTabId(sanitizedTargetRecent, tabId)
+                  : sanitizedTargetRecent
+              },
+              tabId,
+              opts?.clusterId,
+              pinnedTabIds
+            )
           }
           return group
         })

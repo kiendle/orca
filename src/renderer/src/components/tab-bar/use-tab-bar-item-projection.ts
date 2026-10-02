@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { GitFileStatus } from '../../../../shared/git-status-types'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab, TabCluster, TabGroup } from '../../../../shared/tab-types'
 import type { TabBarProps } from './tab-bar-props'
 import {
   buildOrderedTabItems,
@@ -10,9 +10,13 @@ import {
   type TabBarItem
 } from './tab-bar-item-model'
 import type { DropIndicator } from './drop-indicator'
+import { buildTabBarStripItems, type TabBarStripItem } from './tab-bar-cluster-items'
 
 export type TabBarItemProjection = {
   orderedItems: TabBarItem[]
+  stripItems: TabBarStripItem[]
+  visibleItems: TabBarItem[]
+  clusterByUnifiedTabId: Map<string, TabCluster>
   sortableIds: string[]
   dropIndicatorByVisibleId: Map<string, DropIndicator>
   activeVisibleTabId: string | null
@@ -25,7 +29,8 @@ export function useTabBarItemProjection({
   unifiedTabs,
   unifiedTabByVisibleId,
   generatedTabTitlesEnabled,
-  statusByRelativePath
+  statusByRelativePath,
+  group = null
 }: {
   props: TabBarProps
   resolvedGroupId: string
@@ -33,6 +38,7 @@ export function useTabBarItemProjection({
   unifiedTabByVisibleId: Map<string, Tab>
   generatedTabTitlesEnabled: boolean
   statusByRelativePath: Map<string, GitFileStatus>
+  group?: TabGroup | null
 }): TabBarItemProjection {
   const {
     tabs,
@@ -107,16 +113,33 @@ export function useTabBarItemProjection({
       unifiedTabByVisibleId
     ]
   )
-  const sortableIds = useMemo(() => orderedItems.map((item) => item.id), [orderedItems])
+  const stripItems = useMemo(
+    () => buildTabBarStripItems(orderedItems, group),
+    [orderedItems, group]
+  )
+  const visibleItems = useMemo(
+    () => stripItems.filter((item): item is TabBarItem => item.type !== 'cluster'),
+    [stripItems]
+  )
+  const clusterByUnifiedTabId = useMemo(() => {
+    const lookup = new Map<string, TabCluster>()
+    for (const cluster of group?.tabClusters ?? []) {
+      for (const tabId of cluster.tabIds) {
+        lookup.set(tabId, cluster)
+      }
+    }
+    return lookup
+  }, [group?.tabClusters])
+  const sortableIds = useMemo(() => stripItems.map((item) => item.id), [stripItems])
   const activeIndicator =
     hoveredTabInsertion?.groupId === resolvedGroupId ? hoveredTabInsertion : null
   const dropIndicatorByVisibleId = useMemo(
-    () => buildTabDropIndicators(orderedItems, activeIndicator),
-    [activeIndicator, orderedItems]
+    () => buildTabDropIndicators(stripItems, activeIndicator),
+    [activeIndicator, stripItems]
   )
   const activeVisibleTabId = useMemo(
     () =>
-      findActiveVisibleTabId(orderedItems, {
+      findActiveVisibleTabId(visibleItems, {
         activeTabId,
         activeFileId,
         activeBrowserTabId,
@@ -129,22 +152,32 @@ export function useTabBarItemProjection({
       activeSimulatorTabId,
       activeTabId,
       activeTabType,
-      orderedItems
+      visibleItems
     ]
   )
   const tabStripLayoutKey = useMemo(
     () =>
       buildTabStripLayoutKey(
-        orderedItems,
+        visibleItems,
         generatedTabTitlesEnabled,
         expandedPaneByTabId,
         statusByRelativePath
-      ),
-    [expandedPaneByTabId, generatedTabTitlesEnabled, orderedItems, statusByRelativePath]
+      ) +
+      stripItems
+        .filter((item) => item.type === 'cluster')
+        .map(
+          (item) =>
+            `${item.id}:${item.data.name}:${item.data.color}:${item.data.collapsed}:${item.data.tabIds.length}`
+        )
+        .join('\u001f'),
+    [expandedPaneByTabId, generatedTabTitlesEnabled, visibleItems, stripItems, statusByRelativePath]
   )
 
   return {
     orderedItems,
+    stripItems,
+    visibleItems,
+    clusterByUnifiedTabId,
     sortableIds,
     dropIndicatorByVisibleId,
     activeVisibleTabId,

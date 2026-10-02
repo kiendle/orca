@@ -36,6 +36,10 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  Folder: () => null,
+  FolderInput: () => null,
+  FolderMinus: () => null,
+  FolderPlus: () => null,
   ArrowDown: function ArrowDown(props: Record<string, unknown>) {
     return { type: 'ArrowDown', props }
   },
@@ -105,10 +109,12 @@ const useAppStoreMock = Object.assign(
       settings: Record<string, unknown>
       unifiedTabsByWorktree: Record<string, unknown[]>
       groupsByWorktree: Record<string, unknown[]>
+      tabSelectionByGroupId: Record<string, never>
     }) => unknown
   ) =>
     selector({
       settings: {},
+      tabSelectionByGroupId: {},
       unifiedTabsByWorktree: {
         'wt-1': [{ id: 'tab-1', groupId: 'group-1' }]
       },
@@ -119,6 +125,7 @@ const useAppStoreMock = Object.assign(
   {
     getState: () => ({
       settings: {},
+      tabSelectionByGroupId: {},
       unifiedTabsByWorktree: {
         'wt-1': [{ id: 'tab-1', groupId: 'group-1' }]
       },

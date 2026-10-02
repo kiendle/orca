@@ -14,6 +14,8 @@ export type TabBarProps = {
   expandedPaneByTabId: Record<string, boolean>
   onActivate: (tabId: string) => void
   onClose: (tabId: string) => void
+  /** Closes a unified tab through the pane's confirmation-aware single-tab UI path. */
+  onCloseTab?: (tabId: string) => void
   onCloseOthers: (tabId: string) => void
   onCloseToRight: (tabId: string) => void
   onCloseToLeft: (tabId: string) => void
