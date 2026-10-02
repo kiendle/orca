@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
 import { guardRunningTerminalGroupClose } from '../terminal/running-terminal-close-guard'
@@ -13,7 +13,6 @@ import { resolveTabStripSelection, type TabStripActivationModifiers } from './ta
 
 export type TabBarClusterInteractions = {
   highlightedTabIds: ReadonlySet<string>
-  autoRenameClusterIds: ReadonlySet<string>
   selectTab: (tabId: string, modifiers: TabStripActivationModifiers) => boolean
   clearSelection: () => void
   closeCluster: (cluster: TabCluster) => void
@@ -23,7 +22,6 @@ export function useTabBarClusterInteractions({
   props,
   groupId,
   group,
-  groups,
   allItems,
   visibleItems,
   activeVisibleTabId
@@ -31,35 +29,11 @@ export function useTabBarClusterInteractions({
   props: TabBarProps
   groupId: string
   group: TabGroup | null
-  groups: readonly TabGroup[]
   allItems: readonly TabBarItem[]
   visibleItems: readonly TabBarItem[]
   activeVisibleTabId: string | null
 }): TabBarClusterInteractions {
   const selection = useAppStore((state) => state.tabSelectionByGroupId[groupId])
-  const seenClusterIdsRef = useRef<ReadonlySet<string> | null>(null)
-  const autoRenameClusterIds = useMemo(() => {
-    const ids = new Set<string>()
-    const seen = seenClusterIdsRef.current
-    if (seen) {
-      for (const cluster of group?.tabClusters ?? []) {
-        if (cluster.name === '' && !seen.has(cluster.id)) {
-          ids.add(cluster.id)
-        }
-      }
-    }
-    return ids
-  }, [group?.tabClusters])
-  useEffect(() => {
-    // Why: a restored or moved unnamed cluster must not steal focus by reopening its rename field.
-    const ids = new Set<string>()
-    for (const pane of groups) {
-      for (const cluster of pane.tabClusters ?? []) {
-        ids.add(cluster.id)
-      }
-    }
-    seenClusterIdsRef.current = ids
-  }, [groups])
   const highlightedTabIds = useMemo(() => new Set(selection?.tabIds), [selection])
   const visibleTabIds = useMemo(() => visibleItems.map((item) => item.unifiedTabId), [visibleItems])
   const activeTabId =
@@ -96,7 +70,6 @@ export function useTabBarClusterInteractions({
     const unifiedTabById = new Map(
       (state.unifiedTabsByWorktree[props.worktreeId] ?? []).map((tab) => [tab.id, tab])
     )
-    // Why: collapsed members disappear from visibleItems, not from the group's close.
     const terminals = tabIds.flatMap((tabId) => {
       const item = itemByUnifiedId.get(tabId)
       const tab = unifiedTabById.get(tabId)
@@ -121,7 +94,7 @@ export function useTabBarClusterInteractions({
         : []
     })
     guardRunningTerminalGroupClose({
-      subjectKey: `tab-cluster:${cluster.id}`,
+      subjectKey: `tab-cluster:${JSON.stringify([props.worktreeId, groupId, cluster.id])}`,
       groupLabel: cluster.name,
       terminals,
       onClose: () => {
@@ -140,5 +113,5 @@ export function useTabBarClusterInteractions({
       }
     })
   }
-  return { highlightedTabIds, autoRenameClusterIds, selectTab, clearSelection, closeCluster }
+  return { highlightedTabIds, selectTab, clearSelection, closeCluster }
 }

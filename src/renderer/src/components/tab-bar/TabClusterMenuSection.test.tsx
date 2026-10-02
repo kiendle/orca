@@ -1,49 +1,30 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Tab, TabCluster, TabGroup } from '../../../../shared/tab-types'
-import type { TabStripSelection } from '@/store/slices/tabs/tabs-slice-contract'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import type { AppState } from '@/store/types'
+import {
+  createTestStore,
+  makeUnifiedTab,
+  seedStore,
+  type TestStore
+} from '@/store/slices/store-test-helpers'
+import type { TabCluster, TabGroup } from '../../../../shared/tab-types'
 import { TabClusterMenuSection } from './TabClusterMenuSection'
 import { getTabClusterMenuTargets } from './tab-cluster-menu-targets'
 
-const model = vi.hoisted(() => {
-  const groupsByWorktree: Record<string, TabGroup[]> = {}
-  const unifiedTabsByWorktree: Record<string, Tab[]> = {}
-  const tabSelectionByGroupId: Record<string, TabStripSelection> = {}
-  return {
-    groupsByWorktree,
-    unifiedTabsByWorktree,
-    tabSelectionByGroupId,
-    createTabCluster: vi.fn(),
-    addTabsToCluster: vi.fn(),
-    removeTabsFromCluster: vi.fn()
-  }
-})
+let store: TestStore
 
+vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: typeof model) => unknown) => selector(model)
-}))
-vi.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenuItem: ({ children, disabled }: { children: React.ReactNode; disabled?: boolean }) => (
-    <button role="menuitem" disabled={disabled}>
-      {children}
-    </button>
-  ),
-  DropdownMenuSubTrigger: ({
-    children,
-    disabled
-  }: {
-    children: React.ReactNode
-    disabled?: boolean
-  }) => (
-    <button role="menuitem" disabled={disabled}>
-      {children}
-    </button>
-  ),
-  DropdownMenuSeparator: () => <hr />,
-  DropdownMenuSub: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DropdownMenuSubContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>
+  useAppStore: Object.assign((selector: (state: AppState) => unknown) => store(selector), {
+    getState: () => store.getState()
+  })
 }))
 
 const CLUSTER: TabCluster = {
@@ -62,9 +43,21 @@ const PANE: TabGroup = {
 }
 
 beforeEach(() => {
-  model.groupsByWorktree = { wt: [PANE] }
-  model.unifiedTabsByWorktree = { wt: [] }
-  model.tabSelectionByGroupId = {}
+  store = createTestStore()
+  seedStore(store, {
+    groupsByWorktree: { wt: [PANE] },
+    unifiedTabsByWorktree: {
+      wt: PANE.tabOrder.map((id) =>
+        makeUnifiedTab({
+          id,
+          groupId: 'pane',
+          worktreeId: 'wt',
+          contentType: 'editor',
+          isPinned: id === 'a'
+        })
+      )
+    }
+  })
 })
 afterEach(cleanup)
 
@@ -104,71 +97,31 @@ describe('cluster grouping menu targets', () => {
       })
     ).toEqual({ tabIds: ['a', 'b', 'c'], groupableTabIds: ['c'], hasClusterMembers: true })
   })
-})
 
-describe('cluster grouping menu labels and availability', () => {
-  it('names a single-tab action and shows an unnamed existing cluster', () => {
+  it('keeps a pinned-only target out of groups through the rendered menu', () => {
     render(
-      <TabClusterMenuSection
-        worktreeId="wt"
-        groupId="pane"
-        tabId="a"
-        isPinned={false}
-        onQueueNewCluster={() => {}}
-      />
+      <DropdownMenu open>
+        <DropdownMenuTrigger asChild>
+          <button>Tab menu</button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <TabClusterMenuSection
+            worktreeId="wt"
+            groupId="pane"
+            tabId="a"
+            isPinned
+            onQueueNewCluster={(create) => create()}
+          />
+        </DropdownMenuContent>
+      </DropdownMenu>
     )
+    const create = screen.getByRole('menuitem', { name: 'Add Tab to New Group' })
+    expect(create.getAttribute('aria-disabled')).toBe('true')
     expect(
-      screen.getByRole('menuitem', { name: 'Add Tab to New Group' }).hasAttribute('disabled')
-    ).toBe(false)
-    expect(screen.getByRole('menuitem', { name: 'Unnamed group' })).toBeDefined()
-    expect(screen.queryByRole('menuitem', { name: 'Remove from Group' })).toBeNull()
-  })
-
-  it('names the whole selection when a selected member is right-clicked', () => {
-    model.tabSelectionByGroupId = { pane: { tabIds: ['a', 'b', 'c'], anchorTabId: 'a' } }
-    render(
-      <TabClusterMenuSection
-        worktreeId="wt"
-        groupId="pane"
-        tabId="b"
-        isPinned={false}
-        onQueueNewCluster={() => {}}
-      />
-    )
-    expect(screen.getByRole('menuitem', { name: 'Add 3 Tabs to New Group' })).toBeDefined()
-    expect(screen.getByRole('menuitem', { name: 'Remove from Group' })).toBeDefined()
-  })
-
-  it('does not let an unrelated highlighted selection change a single-tab menu', () => {
-    model.tabSelectionByGroupId = { pane: { tabIds: ['b', 'c'], anchorTabId: 'b' } }
-    render(
-      <TabClusterMenuSection
-        worktreeId="wt"
-        groupId="pane"
-        tabId="a"
-        isPinned={false}
-        onQueueNewCluster={() => {}}
-      />
-    )
-    expect(screen.getByRole('menuitem', { name: 'Add Tab to New Group' })).toBeDefined()
-    expect(screen.queryByRole('menuitem', { name: 'Add 2 Tabs to New Group' })).toBeNull()
-  })
-
-  it('disables grouping for a pinned-only target', () => {
-    render(
-      <TabClusterMenuSection
-        worktreeId="wt"
-        groupId="pane"
-        tabId="a"
-        isPinned
-        onQueueNewCluster={() => {}}
-      />
-    )
-    expect(
-      screen.getByRole('menuitem', { name: 'Add Tab to New Group' }).hasAttribute('disabled')
-    ).toBe(true)
-    expect(screen.getByRole('menuitem', { name: 'Add to Group' }).hasAttribute('disabled')).toBe(
-      true
-    )
+      screen.getByRole('menuitem', { name: 'Add to Group' }).getAttribute('aria-disabled')
+    ).toBe('true')
+    fireEvent.click(create)
+    expect(store.getState().groupsByWorktree.wt[0].tabOrder).toEqual(PANE.tabOrder)
+    expect(store.getState().groupsByWorktree.wt[0].tabClusters).toEqual([CLUSTER])
   })
 })

@@ -113,14 +113,6 @@ export function useTabBarItemProjection({
       unifiedTabByVisibleId
     ]
   )
-  const stripItems = useMemo(
-    () => buildTabBarStripItems(orderedItems, group),
-    [orderedItems, group]
-  )
-  const visibleItems = useMemo(
-    () => stripItems.filter((item): item is TabBarItem => item.type !== 'cluster'),
-    [stripItems]
-  )
   const clusterByUnifiedTabId = useMemo(() => {
     const lookup = new Map<string, TabCluster>()
     for (const cluster of group?.tabClusters ?? []) {
@@ -130,6 +122,14 @@ export function useTabBarItemProjection({
     }
     return lookup
   }, [group?.tabClusters])
+  const stripItems = useMemo(
+    () => buildTabBarStripItems(orderedItems, group, clusterByUnifiedTabId),
+    [orderedItems, group, clusterByUnifiedTabId]
+  )
+  const visibleItems = useMemo(
+    () => stripItems.filter((item): item is TabBarItem => item.type !== 'cluster'),
+    [stripItems]
+  )
   const sortableIds = useMemo(() => stripItems.map((item) => item.id), [stripItems])
   const activeIndicator =
     hoveredTabInsertion?.groupId === resolvedGroupId ? hoveredTabInsertion : null

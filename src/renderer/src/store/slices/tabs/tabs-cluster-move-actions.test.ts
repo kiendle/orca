@@ -128,23 +128,6 @@ describe('moving and merging tab clusters', () => {
     expect(snapshots.every((members) => members.join(',') === 'a,b')).toBe(true)
   })
 
-  it('moves a cluster within its pane using a post-removal index', () => {
-    seedPanes(
-      ['a', 'b', 'outside', 'last'],
-      ['x'],
-      [cluster('c', ['a', 'b'], { collapsed: true, shownTabId: 'a' })]
-    )
-    expect(store.getState().moveTabCluster('source', 'c', { groupId: 'source', index: 2 })).toBe(
-      true
-    )
-    const source = store.getState().groupsByWorktree[WT][0]
-    expect(source.tabOrder).toEqual(['outside', 'last', 'a', 'b'])
-    expect(source.tabClusters).toEqual([
-      cluster('c', ['a', 'b'], { collapsed: true, shownTabId: 'a' })
-    ])
-    expect(source.activeTabId).toBe('b')
-  })
-
   it('moves a whole cluster to a new edge split and preserves its collapsed presentation', () => {
     seedPanes(
       ['a', 'b', 'stay'],

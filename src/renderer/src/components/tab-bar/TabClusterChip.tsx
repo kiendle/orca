@@ -14,20 +14,19 @@ import { TAB_CLUSTER_COLOR_CLASSES } from './tab-cluster-colors'
 import { getDropIndicatorClasses, type DropIndicator } from './drop-indicator'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { useTabStripRename } from './use-tab-strip-rename'
+import { useTabClusterRenameRequest } from './tab-cluster-rename-request'
 
 export function TabClusterChip({
   cluster,
   groupId,
   worktreeId,
   onClose,
-  autoRename = false,
   dropIndicator
 }: {
   cluster: TabCluster
   groupId: string
   worktreeId: string
   onClose: () => void
-  autoRename?: boolean
   dropIndicator?: DropIndicator
 }): React.JSX.Element {
   const renameCluster = useAppStore((state) => state.renameTabCluster)
@@ -35,11 +34,10 @@ export function TabClusterChip({
   const restoreCollapseState = useAppStore((state) => state.restoreTabClusterCollapseState)
   const rename = useTabStripRename({
     value: cluster.name,
-    autoStart: autoRename && cluster.name === '',
     onCommit: (name) => renameCluster(groupId, cluster.id, name)
   })
+  useTabClusterRenameRequest(worktreeId, groupId, cluster.id, rename.handleRenameOpen)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const sortableId = getTabClusterSortableId(groupId, cluster.id)
   const dragData: TabClusterDragItemData = {
     kind: 'tab-cluster',
@@ -168,18 +166,16 @@ export function TabClusterChip({
   )
 
   return (
-    <>
-      <div
-        data-tab-strip-slot={sortableId}
-        className="flex h-full shrink-0"
-        onContextMenuCapture={(event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
-          setMenuPoint({ x: event.clientX, y: event.clientY })
-          setMenuOpen(true)
-        }}
-      >
+    <TabClusterContextMenu
+      cluster={cluster}
+      groupId={groupId}
+      worktreeId={worktreeId}
+      open={menuOpen}
+      onOpenChange={setMenuOpen}
+      onRename={rename.handleRenameOpen}
+      onClose={onClose}
+    >
+      <div data-tab-strip-slot={sortableId} className="flex h-full shrink-0">
         {!cluster.name && !rename.isEditing && !menuOpen ? (
           <Tooltip>
             <TooltipTrigger asChild>{chip}</TooltipTrigger>
@@ -191,16 +187,6 @@ export function TabClusterChip({
           chip
         )}
       </div>
-      <TabClusterContextMenu
-        cluster={cluster}
-        groupId={groupId}
-        worktreeId={worktreeId}
-        open={menuOpen}
-        point={menuPoint}
-        onOpenChange={setMenuOpen}
-        onRename={rename.handleRenameOpen}
-        onClose={onClose}
-      />
-    </>
+    </TabClusterContextMenu>
   )
 }

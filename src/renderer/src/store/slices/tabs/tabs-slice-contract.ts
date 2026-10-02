@@ -140,8 +140,6 @@ export type TabsSlice = {
       index?: number
       activate?: boolean
       recordInteraction?: boolean
-      /** Destination membership set atomically with the move. */
-      clusterId?: string | null
     }
   ) => boolean
   dropUnifiedTab: (
@@ -183,7 +181,7 @@ export type TabsSlice = {
   tabSelectionByGroupId: Record<string, TabStripSelection>
   /** null clears the pane's selection. */
   setTabSelection: (groupId: string, selection: TabStripSelection | null) => void
-  /** Gathers the tabs (pane order) at the first one's position; pinned/foreign ids skipped. Returns cluster id. */
+  /** Preserves untouched source groups when gathering selected tabs. Returns the new cluster id. */
   createTabCluster: (
     groupId: string,
     tabIds: string[],
@@ -210,7 +208,7 @@ export type TabsSlice = {
     tabIds: string[],
     target: { index: number; clusterId: string | null }
   ) => void
-  /** Moves every member (and the cluster record) to another pane, index, or a new split. */
+  /** Moves every member and its cluster record to another pane or a new split. */
   moveTabCluster: (
     sourceGroupId: string,
     clusterId: string,

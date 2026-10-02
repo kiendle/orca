@@ -153,7 +153,6 @@ export function renderFloatingTerminalPanelSurface({
               expandedPaneByTabId={expandedPaneByTabId}
               onActivate={activateFloatingItem}
               onClose={closeFloatingItemConfirmed}
-              onCloseTab={closeFloatingItemConfirmed}
               onCloseTabs={closeFloatingClusterConfirmed}
               onCloseOthers={closeOthers}
               onCloseToRight={closeToRight}

@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils'
 import type { Tab } from '../../../../shared/tab-types'
 import { TAB_CLUSTER_COLOR_CLASSES } from './tab-cluster-colors'
 import { getTabClusterMenuTargets } from './tab-cluster-menu-targets'
+import { requestTabClusterRename } from './tab-cluster-rename-request'
 
 const EMPTY_TABS: readonly Tab[] = []
 
@@ -61,7 +62,14 @@ export function TabClusterMenuSection({
       <DropdownMenuSeparator />
       <DropdownMenuItem
         disabled={disabled}
-        onSelect={() => onQueueNewCluster(() => createCluster(groupId, targets.groupableTabIds))}
+        onSelect={() =>
+          onQueueNewCluster(() => {
+            const clusterId = createCluster(groupId, targets.groupableTabIds)
+            if (clusterId) {
+              requestTabClusterRename(worktreeId, groupId, clusterId)
+            }
+          })
+        }
       >
         <FolderPlus className="size-3.5" />
         {targets.tabIds.length > 1

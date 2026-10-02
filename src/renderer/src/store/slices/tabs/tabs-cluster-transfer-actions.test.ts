@@ -71,13 +71,7 @@ beforeEach(() => {
   })
 })
 
-describe.each(['drop', 'move'] as const)('%s tab cluster transfers', (operation) => {
-  function transfer(index: number, clusterId: string | null) {
-    return operation === 'drop'
-      ? store.getState().dropUnifiedTab('s2', { groupId: 'target', index, clusterId })
-      : store.getState().moveUnifiedTabToGroup('s2', 'target', { index, clusterId })
-  }
-
+describe('single-tab cluster drops', () => {
   it('joins inside the destination span at the requested position without clipping members', () => {
     const publishedDestinations: string[][] = []
     const unsubscribe = store.subscribe((state) => {
@@ -87,7 +81,11 @@ describe.each(['drop', 'move'] as const)('%s tab cluster transfers', (operation)
       }
     })
     try {
-      expect(transfer(2, TARGET_CLUSTER.id)).toBe(true)
+      expect(
+        store
+          .getState()
+          .dropUnifiedTab('s2', { groupId: 'target', index: 2, clusterId: TARGET_CLUSTER.id })
+      ).toBe(true)
     } finally {
       unsubscribe()
     }
@@ -102,18 +100,15 @@ describe.each(['drop', 'move'] as const)('%s tab cluster transfers', (operation)
     }
   })
 
-  it.each([1, 4])('leaves a nonmember ungrouped at boundary index %s', (index) => {
-    expect(transfer(index, null)).toBe(true)
-    expect(pane('target').tabClusters).toEqual([TARGET_CLUSTER])
-    expect(pane('target').tabOrder[index]).toBe('s2')
-    expect(pane('source').tabClusters?.[0].tabIds).toEqual(['s1'])
-  })
-
   it('drops the sticky state when its member moves alone into a different cluster', () => {
     store.getState().setTabClusterCollapsed('source', SOURCE_CLUSTER.id, false)
     store.getState().setTabClusterCollapsed('source', SOURCE_CLUSTER.id, true)
     expect(pane('source').tabClusters?.[0].shownTabId).toBe('s2')
-    expect(transfer(2, TARGET_CLUSTER.id)).toBe(true)
+    expect(
+      store
+        .getState()
+        .dropUnifiedTab('s2', { groupId: 'target', index: 2, clusterId: TARGET_CLUSTER.id })
+    ).toBe(true)
     expect(pane('source').tabClusters).toEqual([{ ...SOURCE_CLUSTER, tabIds: ['s1'] }])
     expect(pane('target').tabClusters).toEqual([
       { ...TARGET_CLUSTER, tabIds: ['a', 's2', 'b', 'c'] }
@@ -121,14 +116,25 @@ describe.each(['drop', 'move'] as const)('%s tab cluster transfers', (operation)
     store.getState().activateTab('tail')
     expect([...getHiddenClusterTabIds(pane('source'))]).toEqual(['s1'])
   })
+})
+
+describe.each(['drop', 'move'] as const)('%s source cluster cleanup', (operation) => {
+  function transfer(tabId: string, index: number): boolean {
+    return operation === 'drop'
+      ? store.getState().dropUnifiedTab(tabId, { groupId: 'target', index })
+      : store.getState().moveUnifiedTabToGroup(tabId, 'target', { index })
+  }
+
+  it.each([1, 4])('leaves a nonmember ungrouped at boundary index %s', (index) => {
+    expect(transfer('s2', index)).toBe(true)
+    expect(pane('target').tabClusters).toEqual([TARGET_CLUSTER])
+    expect(pane('target').tabOrder[index]).toBe('s2')
+    expect(pane('source').tabClusters?.[0].tabIds).toEqual(['s1'])
+  })
 
   it('removes the final source member without carrying its cluster record', () => {
-    transfer(1, null)
-    if (operation === 'drop') {
-      store.getState().dropUnifiedTab('s1', { groupId: 'target', index: 1 })
-    } else {
-      store.getState().moveUnifiedTabToGroup('s1', 'target', { index: 1 })
-    }
+    transfer('s2', 1)
+    transfer('s1', 1)
     expect(pane('source').tabOrder).toEqual(['tail'])
     expect(Object.hasOwn(pane('source'), 'tabClusters')).toBe(false)
     expect(pane('target').tabClusters).toEqual([TARGET_CLUSTER])

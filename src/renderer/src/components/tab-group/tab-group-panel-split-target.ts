@@ -216,8 +216,7 @@ export function resolveActivePaneColumnSplitTarget({
   layoutByWorktree,
   worktreeId,
   getDragPointer,
-  geometry,
-  allowTabClusterSplit = true
+  geometry
 }: {
   event: DragMoveEvent | DragOverEvent | DragEndEvent
   groupsByWorktree: Record<string, TabGroup[]>
@@ -228,16 +227,10 @@ export function resolveActivePaneColumnSplitTarget({
     y: number
   } | null
   geometry?: TabGroupPanelGeometrySnapshot | null
-  allowTabClusterSplit?: boolean
 }): ActivePaneColumnSplitTarget | null {
   const activeData = event.active.data.current
   const pointer = getDragPointer(event)
-  if (
-    !isTabStripDragData(activeData) ||
-    activeData.worktreeId !== worktreeId ||
-    (isTabClusterDragData(activeData) && !allowTabClusterSplit) ||
-    !pointer
-  ) {
+  if (!isTabStripDragData(activeData) || activeData.worktreeId !== worktreeId || !pointer) {
     return null
   }
 

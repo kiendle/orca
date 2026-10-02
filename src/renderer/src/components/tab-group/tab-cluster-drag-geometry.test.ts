@@ -124,20 +124,6 @@ describe('cluster pane edge geometry', () => {
     ).toMatchObject({ groupId: GROUP.id, zone: 'right' })
   })
 
-  it('does not show cluster split zones when local splitting is unavailable', () => {
-    expect(
-      resolveActivePaneColumnSplitTarget({
-        event: dragEvent(CHIP, null),
-        groupsByWorktree: { [WT]: [{ ...GROUP, tabOrder: [...GROUP.tabOrder, 'tail'] }] },
-        layoutByWorktree: {},
-        worktreeId: WT,
-        geometry: geometry(),
-        allowTabClusterSplit: false,
-        getDragPointer: () => ({ x: 398, y: 300 })
-      })
-    ).toBeNull()
-  })
-
   it('keeps chip strip hovers out of pane split zones', () => {
     expect(
       resolveActivePaneColumnSplitTarget({

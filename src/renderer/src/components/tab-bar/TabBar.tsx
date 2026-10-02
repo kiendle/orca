@@ -10,9 +10,6 @@ import { renderTabBarSurface } from './tab-bar-surface'
 import { useActiveClientHostedBrowserRowId } from '@/lib/pane-manager/client-hosted-browser-row-state'
 import { useAppStore } from '@/store'
 import { useTabBarClusterInteractions } from './use-tab-bar-cluster-interactions'
-import type { TabGroup } from '../../../../shared/tab-types'
-
-const EMPTY_GROUPS: readonly TabGroup[] = []
 
 function TabBarInner(props: TabBarProps): React.JSX.Element {
   const {
@@ -28,8 +25,11 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     onPinFile
   } = props
   const runtime = useTabBarRuntimeModel({ worktreeId, groupId })
-  const groups = useAppStore((state) => state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS)
-  const group = groups.find((item) => item.id === runtime.resolvedGroupId) ?? null
+  const group = useAppStore(
+    (state) =>
+      state.groupsByWorktree[worktreeId]?.find((item) => item.id === runtime.resolvedGroupId) ??
+      null
+  )
   const createMenu = useTabBarCreateMenuController({
     worktreeId,
     resolvedGroupId: runtime.resolvedGroupId,
@@ -64,7 +64,6 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     props,
     groupId: runtime.resolvedGroupId,
     group,
-    groups,
     allItems: itemProjection.orderedItems,
     visibleItems: itemProjection.visibleItems,
     activeVisibleTabId: itemProjection.activeVisibleTabId

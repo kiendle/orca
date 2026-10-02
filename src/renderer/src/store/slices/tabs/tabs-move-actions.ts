@@ -2,7 +2,6 @@ import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contrac
 import { collapseGroupLayout } from './tabs-layout'
 import { buildActiveSurfacePatch } from './tabs-surface'
 import { applyTransferredTabClusterMembership } from './tab-cluster-transfer'
-import { promoteClusterPreviewTabs } from './tabs-cluster-strip-actions'
 import {
   dedupeTabOrder,
   findGroupAndWorktree,
@@ -19,18 +18,6 @@ export function createTabsMoveActions(
 ): Pick<TabsSlice, 'moveUnifiedTabToGroup'> {
   return {
     moveUnifiedTabToGroup: (tabId, targetGroupId, opts) => {
-      if (opts?.clusterId) {
-        const state = get()
-        const foundTab = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
-        const foundTarget = findGroupAndWorktree(state.groupsByWorktree, targetGroupId)
-        if (
-          foundTab &&
-          foundTarget?.worktreeId === foundTab.worktreeId &&
-          foundTarget.group.tabClusters?.some((cluster) => cluster.id === opts.clusterId)
-        ) {
-          promoteClusterPreviewTabs(get, foundTab.tab.groupId, [tabId])
-        }
-      }
       let moved = false
       set((state) => {
         const foundTab = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
@@ -84,26 +71,21 @@ export function createTabsMoveActions(
                 tabOrder: sourceOrder,
                 recentTabIds: sourceRecentTabIds
               },
-              tabId,
+              [tabId],
               null,
               pinnedTabIds
             )
           }
           if (group.id === targetGroupId) {
             const sanitizedTargetRecent = sanitizeRecentTabIds(group.recentTabIds, targetOrder)
-            return applyTransferredTabClusterMembership(
-              {
-                ...group,
-                activeTabId: opts?.activate ? tabId : group.activeTabId,
-                tabOrder: targetOrder,
-                recentTabIds: opts?.activate
-                  ? pushRecentTabId(sanitizedTargetRecent, tabId)
-                  : sanitizedTargetRecent
-              },
-              tabId,
-              opts?.clusterId,
-              pinnedTabIds
-            )
+            return {
+              ...group,
+              activeTabId: opts?.activate ? tabId : group.activeTabId,
+              tabOrder: targetOrder,
+              recentTabIds: opts?.activate
+                ? pushRecentTabId(sanitizedTargetRecent, tabId)
+                : sanitizedTargetRecent
+            }
           }
           return group
         })

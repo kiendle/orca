@@ -182,7 +182,6 @@ export function renderTabBarSurface({
                   cluster={item.data}
                   groupId={resolvedGroupId}
                   worktreeId={worktreeId}
-                  autoRename={clusterInteractions.autoRenameClusterIds.has(item.data.id)}
                   onClose={() => clusterInteractions.closeCluster(item.data)}
                   dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
                 />

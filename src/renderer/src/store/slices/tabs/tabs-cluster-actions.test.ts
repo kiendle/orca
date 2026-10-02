@@ -102,16 +102,30 @@ describe('tab cluster actions', () => {
     expect(store.getState().groupsByWorktree[WT][0].tabOrder).toContain('preview')
   })
 
-  it('members leave their previous clusters when grouped again', () => {
-    seedPane(['a', 'b', 'c', 'd'], [cluster('old', ['a', 'b', 'c'])])
-    const id = store.getState().createTabCluster(PANE, ['b', 'd'])
-    const pane = store.getState().groupsByWorktree[WT][0]
-    expect(pane.tabOrder).toEqual(['a', 'b', 'd', 'c'])
-    expect(pane.tabClusters).toEqual([
-      cluster('old', ['a']),
-      cluster(id!, ['b', 'd'], { color: 'grey' })
-    ])
-  })
+  it.each([
+    {
+      selected: ['b', 'd'],
+      order: ['a', 'c', 'b', 'd'],
+      remaining: ['a', 'c']
+    },
+    {
+      selected: ['a', 'd'],
+      order: ['a', 'd', 'b', 'c'],
+      remaining: ['b', 'c']
+    }
+  ])(
+    'preserves untouched source members when regrouping $selected',
+    ({ selected, order, remaining }) => {
+      seedPane(['a', 'b', 'c', 'd'], [cluster('old', ['a', 'b', 'c'])])
+      const id = store.getState().createTabCluster(PANE, selected)
+      const pane = store.getState().groupsByWorktree[WT][0]
+      expect(pane.tabOrder).toEqual(order)
+      expect(pane.tabClusters).toEqual([
+        cluster('old', remaining),
+        cluster(id!, selected, { color: 'grey' })
+      ])
+    }
+  )
 
   it('uses the first unused palette color and cycles after the palette is exhausted', () => {
     const ids = [...TAB_CLUSTER_COLORS.map((_, index) => `t${index}`), 'extra']

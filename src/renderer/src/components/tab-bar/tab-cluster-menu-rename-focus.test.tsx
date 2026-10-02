@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 
-import { create } from 'zustand'
 import { useState } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -10,61 +9,26 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { useAppStore } from '@/store'
-import type { TabsSlice } from '@/store/slices/tabs/tabs-slice-contract'
+import type { AppState } from '@/store/types'
+import {
+  createTestStore,
+  makeUnifiedTab,
+  seedStore,
+  type TestStore
+} from '@/store/slices/store-test-helpers'
 import type { TabCluster, TabGroup } from '../../../../shared/tab-types'
 import { TabClusterChip } from './TabClusterChip'
 import { TabClusterMenuSection } from './TabClusterMenuSection'
 import { useTabClusterMenuCloseAction } from './use-tab-cluster-menu-close-action'
 
-type ClusterMenuFocusState = Pick<
-  TabsSlice,
-  | 'groupsByWorktree'
-  | 'unifiedTabsByWorktree'
-  | 'tabSelectionByGroupId'
-  | 'createTabCluster'
-  | 'addTabsToCluster'
-  | 'removeTabsFromCluster'
-  | 'renameTabCluster'
-  | 'setTabClusterColor'
-  | 'setTabClusterCollapsed'
-  | 'ungroupTabCluster'
-  | 'moveTabCluster'
->
+let store: TestStore
 
-vi.mock('@/store', () => {
-  const store = create<ClusterMenuFocusState>()((set) => ({
-    groupsByWorktree: {},
-    unifiedTabsByWorktree: {},
-    tabSelectionByGroupId: {},
-    createTabCluster: (groupId, tabIds) => {
-      const cluster: TabCluster = {
-        id: 'created-cluster',
-        name: '',
-        color: 'blue',
-        collapsed: false,
-        tabIds
-      }
-      set((state) => ({
-        groupsByWorktree: {
-          ...state.groupsByWorktree,
-          wt: state.groupsByWorktree.wt.map((group) =>
-            group.id === groupId ? { ...group, tabClusters: [cluster] } : group
-          )
-        }
-      }))
-      return cluster.id
-    },
-    addTabsToCluster: () => false,
-    removeTabsFromCluster: () => {},
-    renameTabCluster: vi.fn(),
-    setTabClusterColor: () => {},
-    setTabClusterCollapsed: () => {},
-    ungroupTabCluster: () => {},
-    moveTabCluster: () => false
-  }))
-  return { useAppStore: store }
-})
+vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign((selector: (state: AppState) => unknown) => store(selector), {
+    getState: () => store.getState()
+  })
+}))
 vi.mock('@dnd-kit/sortable', () => ({
   useSortable: () => ({
     attributes: { role: 'button', tabIndex: 0 },
@@ -74,15 +38,12 @@ vi.mock('@dnd-kit/sortable', () => ({
 }))
 vi.mock('./SortableTab', () => ({ CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca-close-all-context-menus' }))
 vi.mock('../tab-group/useTabDragSplit', () => ({ TAB_DRAG_ACTIVATION_DISTANCE_PX: 5 }))
-vi.mock('../tab-group/tab-cluster-split-availability', () => ({
-  getTabClusterSplitBlocker: () => null
-}))
 
 const PANE: TabGroup = {
   id: 'pane',
   worktreeId: 'wt',
   activeTabId: 'a',
-  tabOrder: ['a', 'b']
+  tabOrder: ['a', 'b', 'c']
 }
 const CLUSTER: TabCluster = {
   id: 'existing-cluster',
@@ -92,24 +53,30 @@ const CLUSTER: TabCluster = {
   tabIds: ['a', 'b']
 }
 const MENU_EXIT_ANIMATION = `
-  [data-slot="dropdown-menu-content"][data-state="open"] { animation-name: none; }
-  [data-slot="dropdown-menu-content"][data-state="closed"] {
+  [data-slot="dropdown-menu-content"][data-state="open"],
+  [data-slot="context-menu-content"][data-state="open"] { animation-name: none; }
+  [data-slot="dropdown-menu-content"][data-state="closed"],
+  [data-slot="context-menu-content"][data-state="closed"] {
     animation-name: cluster-menu-close;
     animation-duration: 0.2s;
   }
 `
 
-function ChipFromStore({ autoRename = false }: { autoRename?: boolean }): React.JSX.Element | null {
-  const cluster = useAppStore((state) => state.groupsByWorktree.wt[0].tabClusters?.[0])
-  return cluster ? (
-    <TabClusterChip
-      cluster={cluster}
-      groupId="pane"
-      worktreeId="wt"
-      autoRename={autoRename}
-      onClose={() => {}}
-    />
-  ) : null
+function ChipsFromStore(): React.JSX.Element {
+  const clusters = store((state) => state.groupsByWorktree.wt[0].tabClusters)
+  return (
+    <>
+      {clusters?.map((cluster) => (
+        <TabClusterChip
+          key={cluster.id}
+          cluster={cluster}
+          groupId="pane"
+          worktreeId="wt"
+          onClose={() => {}}
+        />
+      ))}
+    </>
+  )
 }
 
 function CreationMenu(): React.JSX.Element {
@@ -120,9 +87,7 @@ function CreationMenu(): React.JSX.Element {
       <style>{MENU_EXIT_ANIMATION}</style>
       <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
         <DropdownMenuTrigger asChild>
-          <button aria-hidden tabIndex={-1}>
-            Tab menu
-          </button>
+          <button>Tab menu</button>
         </DropdownMenuTrigger>
         <DropdownMenuContent onCloseAutoFocus={clusterMenuAction.runAfterClose}>
           {open ? (
@@ -136,7 +101,7 @@ function CreationMenu(): React.JSX.Element {
           ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
-      <ChipFromStore autoRename />
+      <ChipsFromStore />
     </TooltipProvider>
   )
 }
@@ -148,36 +113,69 @@ function finishMenuExit(menu: HTMLElement): void {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
-  useAppStore.setState({
+  store = createTestStore()
+  seedStore(store, {
+    activeWorktreeId: 'wt',
     groupsByWorktree: { wt: [PANE] },
-    unifiedTabsByWorktree: { wt: [] },
+    unifiedTabsByWorktree: {
+      wt: PANE.tabOrder.map((id) =>
+        makeUnifiedTab({ id, groupId: 'pane', worktreeId: 'wt', contentType: 'editor' })
+      )
+    },
     tabSelectionByGroupId: { pane: { tabIds: ['a', 'b'], anchorTabId: 'a' } }
   })
 })
 afterEach(cleanup)
 
 describe('cluster rename after a closing menu', () => {
-  it('creates the group only after menu exit and keeps its new name field focused', async () => {
+  it('creates the group after menu exit and focuses only its new name field', async () => {
+    store.setState({
+      groupsByWorktree: {
+        wt: [{ ...PANE, tabClusters: [{ ...CLUSTER, name: '', tabIds: ['c'] }] }]
+      }
+    })
     render(<CreationMenu />)
     const menu = await screen.findByRole('menu')
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add 2 Tabs to New Group' }))
     expect(menu.getAttribute('data-state')).toBe('closed')
     expect(screen.queryByRole('textbox', { name: 'Rename Group' })).toBeNull()
+    expect(store.getState().groupsByWorktree.wt[0].tabClusters).toHaveLength(1)
     finishMenuExit(menu)
+
     const input = await screen.findByRole('textbox', { name: 'Rename Group' })
+    const created = store
+      .getState()
+      .groupsByWorktree.wt[0].tabClusters?.find((cluster) => cluster.tabIds.includes('a'))
+    expect(created?.tabIds).toEqual(['a', 'b'])
+    expect(input.getAttribute('data-tab-cluster-rename-input')).toBe(created?.id)
+    expect(screen.getAllByRole('textbox')).toEqual([input])
     await waitFor(() => expect(document.activeElement).toBe(input))
     fireEvent.change(input, { target: { value: 'Research' } })
     expect(screen.getByDisplayValue('Research')).toBe(input)
-    expect(useAppStore.getState().renameTabCluster).not.toHaveBeenCalled()
+    expect(
+      store
+        .getState()
+        .groupsByWorktree.wt[0].tabClusters?.find((cluster) => cluster.id === created?.id)?.name
+    ).toBe('')
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(
+      store
+        .getState()
+        .groupsByWorktree.wt[0].tabClusters?.find((cluster) => cluster.id === created?.id)?.name
+    ).toBe('Research')
+    expect(
+      store
+        .getState()
+        .groupsByWorktree.wt[0].tabClusters?.find((cluster) => cluster.id === CLUSTER.id)?.name
+    ).toBe('')
   })
 
   it('opens an existing group rename after its chip menu exits without committing on blur', async () => {
-    useAppStore.setState({ groupsByWorktree: { wt: [{ ...PANE, tabClusters: [CLUSTER] }] } })
+    store.setState({ groupsByWorktree: { wt: [{ ...PANE, tabClusters: [CLUSTER] }] } })
     render(
       <TooltipProvider>
         <style>{MENU_EXIT_ANIMATION}</style>
-        <ChipFromStore />
+        <ChipsFromStore />
       </TooltipProvider>
     )
     fireEvent.contextMenu(screen.getByRole('button', { name: 'Work' }))
@@ -191,6 +189,8 @@ describe('cluster rename after a closing menu', () => {
     expect(screen.getByDisplayValue('Work')).toBe(input)
     fireEvent.change(input, { target: { value: 'Research' } })
     expect(screen.getByDisplayValue('Research')).toBe(input)
-    expect(useAppStore.getState().renameTabCluster).not.toHaveBeenCalled()
+    expect(store.getState().groupsByWorktree.wt[0].tabClusters?.[0].name).toBe('Work')
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(store.getState().groupsByWorktree.wt[0].tabClusters?.[0].name).toBe('Research')
   })
 })

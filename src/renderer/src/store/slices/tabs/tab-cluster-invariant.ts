@@ -2,6 +2,35 @@ import type { StoreApi } from 'zustand'
 import type { AppState } from '../../types'
 import type { TabGroup } from '../../../../../shared/tab-types'
 import { normalizeTabGroupClusters } from './tab-cluster-model'
+import type { TabStripSelection } from './tabs-slice-contract'
+
+export function normalizeTabStripSelection(
+  selection: TabStripSelection | null | undefined,
+  group: TabGroup | undefined,
+  liveIds: ReadonlySet<string> | undefined,
+  previous: TabStripSelection | undefined
+): TabStripSelection | undefined {
+  if (!group || !selection || !liveIds) {
+    return undefined
+  }
+  const requested = new Set(selection.tabIds)
+  const tabIds = group.tabOrder.filter((id) => requested.has(id) && liveIds.has(id))
+  if (!tabIds.length) {
+    return undefined
+  }
+  const anchorTabId =
+    selection.anchorTabId &&
+    liveIds.has(selection.anchorTabId) &&
+    group.tabOrder.includes(selection.anchorTabId)
+      ? selection.anchorTabId
+      : null
+  return previous &&
+    tabIds.length === previous.tabIds.length &&
+    tabIds.every((id, index) => id === previous.tabIds[index]) &&
+    anchorTabId === previous.anchorTabId
+    ? previous
+    : { tabIds, anchorTabId }
+}
 
 export function installTabClusterInvariant(
   store: Pick<StoreApi<AppState>, 'getState' | 'setState' | 'subscribe'>
@@ -79,40 +108,33 @@ export function installTabClusterInvariant(
           if (!requestedPanes.has(group.id)) {
             continue
           }
-          const orderIds = new Set(group.tabOrder)
           panes.set(group.id, {
             group,
             liveIds: new Set(
               (state.unifiedTabsByWorktree[worktreeId] ?? [])
-                .filter((tab) => tab.groupId === group.id && orderIds.has(tab.id))
+                .filter((tab) => tab.groupId === group.id)
                 .map((tab) => tab.id)
             )
           })
         }
       }
       for (const groupId of selectedGroupIds) {
-        const selection = state.tabSelectionByGroupId[groupId]
+        const previousSelection = state.tabSelectionByGroupId[groupId]
         const pane = panes.get(groupId)
-        const requested = new Set(selection.tabIds)
-        const tabIds =
-          pane?.group.tabOrder.filter((id) => requested.has(id) && pane.liveIds.has(id)) ?? []
-        const anchorTabId =
-          selection.anchorTabId && pane?.liveIds.has(selection.anchorTabId)
-            ? selection.anchorTabId
-            : null
-        if (
-          tabIds.length &&
-          tabIds.length === selection.tabIds.length &&
-          tabIds.every((id, index) => id === selection.tabIds[index]) &&
-          anchorTabId === selection.anchorTabId
-        ) {
+        const selection = normalizeTabStripSelection(
+          previousSelection,
+          pane?.group,
+          pane?.liveIds,
+          previousSelection
+        )
+        if (selection === previousSelection) {
           continue
         }
         if (tabSelectionByGroupId === state.tabSelectionByGroupId) {
           tabSelectionByGroupId = { ...tabSelectionByGroupId }
         }
-        if (tabIds.length) {
-          tabSelectionByGroupId[groupId] = { tabIds, anchorTabId }
+        if (selection) {
+          tabSelectionByGroupId[groupId] = selection
         } else {
           delete tabSelectionByGroupId[groupId]
         }

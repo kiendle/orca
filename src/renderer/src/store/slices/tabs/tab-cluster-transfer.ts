@@ -3,23 +3,21 @@ import { normalizeTabGroupClusters } from './tab-cluster-model'
 
 export function applyTransferredTabClusterMembership(
   group: TabGroup,
-  tabId: string,
+  tabIds: readonly string[],
   clusterId: string | null | undefined,
   pinnedTabIds: ReadonlySet<string>
 ): TabGroup {
   if (!group.tabClusters) {
     return normalizeTabGroupClusters(group, pinnedTabIds)
   }
+  const movedIds = new Set(tabIds)
   const tabClusters = group.tabClusters.map((cluster) => {
-    const joining = cluster.id === clusterId && !pinnedTabIds.has(tabId)
-    const wasMember = cluster.tabIds.includes(tabId)
-    if (joining === wasMember) {
+    const remaining = cluster.tabIds.filter((id) => !movedIds.has(id))
+    const joining = cluster.id === clusterId ? tabIds.filter((id) => !pinnedTabIds.has(id)) : []
+    if (remaining.length === cluster.tabIds.length && !joining.length) {
       return cluster
     }
-    return {
-      ...cluster,
-      tabIds: joining ? [...cluster.tabIds, tabId] : cluster.tabIds.filter((id) => id !== tabId)
-    }
+    return { ...cluster, tabIds: [...remaining, ...joining] }
   })
   return normalizeTabGroupClusters({ ...group, tabClusters }, pinnedTabIds)
 }

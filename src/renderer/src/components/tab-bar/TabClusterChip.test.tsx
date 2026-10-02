@@ -1,12 +1,11 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { RenderResult } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { TabCluster, TabGroup } from '../../../../shared/tab-types'
 import { TabClusterChip } from './TabClusterChip'
-import type { TabBarProps } from './tab-bar-props'
 import type { AppState } from '@/store/types'
 import {
   createTestStore,
@@ -15,7 +14,8 @@ import {
   seedStore,
   type TestStore
 } from '@/store/slices/store-test-helpers'
-import { useTabBarClusterInteractions } from './use-tab-bar-cluster-interactions'
+import { requestTabClusterRename } from './tab-cluster-rename-request'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
 
 let store: TestStore
 
@@ -33,7 +33,6 @@ vi.mock('@dnd-kit/sortable', () => ({
   })
 }))
 vi.mock('./SortableTab', () => ({ CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca-close-all-context-menus' }))
-vi.mock('./TabClusterContextMenu', () => ({ TabClusterContextMenu: () => null }))
 vi.mock('../tab-group/useTabDragSplit', () => ({ TAB_DRAG_ACTIVATION_DISTANCE_PX: 5 }))
 
 const CLUSTER: TabCluster = {
@@ -44,24 +43,28 @@ const CLUSTER: TabCluster = {
   tabIds: ['a', 'b', 'c']
 }
 
-function ChipFromStore({ autoRename }: { autoRename: boolean }): React.JSX.Element | null {
-  const cluster = store((state) => state.groupsByWorktree.wt[0].tabClusters?.[0])
-  return cluster ? (
-    <TabClusterChip
-      cluster={cluster}
-      groupId="pane"
-      worktreeId="wt"
-      onClose={() => {}}
-      autoRename={autoRename}
-    />
-  ) : null
+function ChipsFromStore(): React.JSX.Element {
+  const group = store((state) => state.groupsByWorktree.wt?.find((pane) => pane.id === 'pane'))
+  return (
+    <>
+      {group?.tabClusters?.map((cluster) => (
+        <TabClusterChip
+          key={cluster.id}
+          cluster={cluster}
+          groupId="pane"
+          worktreeId="wt"
+          onClose={() => {}}
+        />
+      ))}
+    </>
+  )
 }
 
 function pane(): TabGroup {
   return store.getState().groupsByWorktree.wt[0]
 }
 
-function mount(cluster: TabCluster = CLUSTER, autoRename = false, activeTabId = 'a'): RenderResult {
+function mount(cluster: TabCluster = CLUSTER, activeTabId = 'a'): RenderResult {
   const tabOrder = [...cluster.tabIds, 'x']
   seedStore(store, {
     activeWorktreeId: 'wt',
@@ -84,7 +87,7 @@ function mount(cluster: TabCluster = CLUSTER, autoRename = false, activeTabId = 
   })
   return render(
     <TooltipProvider>
-      <ChipFromStore autoRename={autoRename} />
+      <ChipsFromStore />
     </TooltipProvider>
   )
 }
@@ -99,51 +102,6 @@ function pressChip(detail: number): void {
   fireEvent.click(chip, { detail })
 }
 
-const noop = (): void => {}
-const BAR_PROPS: TabBarProps = {
-  tabs: [],
-  activeTabId: null,
-  worktreeId: 'wt',
-  expandedPaneByTabId: {},
-  onActivate: noop,
-  onClose: noop,
-  onCloseOthers: noop,
-  onCloseToRight: noop,
-  onCloseToLeft: noop,
-  onNewTerminalTab: noop,
-  onNewBrowserTab: noop,
-  onSetCustomTitle: noop,
-  onSetTabColor: noop,
-  onTogglePaneExpand: noop
-}
-
-function StripRenameHarness({ groups }: { groups: readonly TabGroup[] }): React.JSX.Element {
-  const group = groups.find((item) => item.id === 'pane') ?? null
-  const interactions = useTabBarClusterInteractions({
-    props: BAR_PROPS,
-    groupId: 'pane',
-    group,
-    groups,
-    allItems: [],
-    visibleItems: [],
-    activeVisibleTabId: null
-  })
-  return (
-    <TooltipProvider>
-      {group?.tabClusters?.map((cluster) => (
-        <TabClusterChip
-          key={cluster.id}
-          cluster={cluster}
-          groupId="pane"
-          worktreeId="wt"
-          onClose={noop}
-          autoRename={interactions.autoRenameClusterIds.has(cluster.id)}
-        />
-      ))}
-    </TooltipProvider>
-  )
-}
-
 beforeEach(() => {
   vi.clearAllMocks()
   store = createTestStore()
@@ -151,44 +109,62 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('cluster chip rename', () => {
-  it('automatically starts editing the empty name of a newly created cluster', () => {
-    mount({ ...CLUSTER, name: '' }, true)
-    expect(screen.getByRole('textbox', { name: 'Rename Group' })).toBe(screen.getByDisplayValue(''))
-  })
-
-  it('opens the inline field when an unnamed cluster is added to a mounted strip', () => {
-    const pane: TabGroup = {
-      id: 'pane',
-      worktreeId: 'wt',
-      activeTabId: 'a',
-      tabOrder: ['a', 'b', 'c']
-    }
-    const view = render(<StripRenameHarness groups={[pane]} />)
-    view.rerender(
-      <StripRenameHarness groups={[{ ...pane, tabClusters: [{ ...CLUSTER, name: '' }] }]} />
-    )
-    expect(screen.getByRole('textbox', { name: 'Rename Group' })).toBe(screen.getByDisplayValue(''))
-  })
-
-  it('does not reopen rename when an existing unnamed cluster moves between pane strips', () => {
-    const pane: TabGroup = { id: 'pane', worktreeId: 'wt', activeTabId: null, tabOrder: [] }
-    const other: TabGroup = {
-      id: 'other',
-      worktreeId: 'wt',
-      activeTabId: 'a',
-      tabOrder: ['a', 'b', 'c'],
-      tabClusters: [{ ...CLUSTER, name: '' }]
-    }
-    const view = render(<StripRenameHarness groups={[pane, other]} />)
-    view.rerender(
-      <StripRenameHarness
-        groups={[
-          { ...pane, activeTabId: 'a', tabOrder: other.tabOrder, tabClusters: other.tabClusters }
-        ]}
-      />
+  it('retains an explicit rename request until its chip mounts, then consumes it once', () => {
+    requestTabClusterRename('wt', 'pane', CLUSTER.id)
+    const view = mount({ ...CLUSTER, name: '' })
+    const input = screen.getByRole('textbox', { name: 'Rename Group' })
+    expect(input).toBe(screen.getByDisplayValue(''))
+    fireEvent.keyDown(input, { key: 'Escape' })
+    view.unmount()
+    render(
+      <TooltipProvider>
+        <ChipsFromStore />
+      </TooltipProvider>
     )
     expect(screen.queryByRole('textbox')).toBeNull()
+  })
+
+  it('does not open rename when moving an unnamed cluster rekeys a colliding id', () => {
+    mount()
+    const otherCluster: TabCluster = {
+      ...CLUSTER,
+      name: '',
+      tabIds: ['other-a', 'other-b']
+    }
+    const state = store.getState()
+    act(() =>
+      seedStore(store, {
+        groupsByWorktree: {
+          wt: [
+            ...state.groupsByWorktree.wt,
+            makeTabGroup({
+              id: 'other',
+              worktreeId: 'wt',
+              activeTabId: 'other-a',
+              tabOrder: otherCluster.tabIds,
+              tabClusters: [otherCluster]
+            })
+          ]
+        },
+        unifiedTabsByWorktree: {
+          wt: [
+            ...state.unifiedTabsByWorktree.wt,
+            ...otherCluster.tabIds.map((id) =>
+              makeUnifiedTab({ id, groupId: 'other', worktreeId: 'wt', contentType: 'editor' })
+            )
+          ]
+        }
+      })
+    )
+    const chip = screen.getByRole('button', { name: 'Work' })
+    act(() => chip.focus())
+    act(() => store.getState().moveTabCluster('other', CLUSTER.id, { groupId: 'pane' }))
+    const moved = pane().tabClusters?.find((cluster) => cluster.tabIds.includes('other-a'))
+    expect(moved?.id).not.toBe(CLUSTER.id)
+    expect(moved?.name).toBe('')
+    expect(screen.queryByRole('textbox')).toBeNull()
     expect(screen.getByRole('button', { name: 'Unnamed group' })).toBeDefined()
+    expect(document.activeElement).toBe(chip)
   })
 
   it('keeps a restored unnamed cluster color-only without taking rename focus', () => {
@@ -214,7 +190,7 @@ describe('cluster chip rename', () => {
   ])(
     'preserves $label presentation through double-click rename and Escape',
     ({ cluster, activeTabId }) => {
-      mount(cluster, false, activeTabId)
+      mount(cluster, activeTabId)
       const before = pane().tabClusters
       pressChip(1)
       expect(pane().tabClusters?.[0].collapsed).toBe(!cluster.collapsed)
@@ -322,5 +298,24 @@ describe('cluster chip collapse activation', () => {
     expect(chip.textContent).toContain('3')
     fireEvent.keyDown(chip, { key: ' ' })
     expect(pane().tabClusters?.[0].collapsed).toBe(false)
+  })
+})
+
+describe('cluster chip context menu dismissal', () => {
+  it.each([
+    { label: 'close-all-context-menus', eventType: CLOSE_ALL_CONTEXT_MENUS_EVENT },
+    { label: 'window blur', eventType: 'blur' }
+  ])('closes on $label and can reopen on right-click', async ({ eventType }) => {
+    mount()
+    const chip = screen.getByRole('button', { name: 'Work' })
+    fireEvent.contextMenu(chip)
+    expect(await screen.findByRole('menu')).toBeDefined()
+    fireEvent.contextMenu(chip)
+    expect(screen.getByRole('menu')).toBeDefined()
+    act(() => window.dispatchEvent(new Event(eventType)))
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+    fireEvent.contextMenu(chip)
+    expect(await screen.findByRole('menu')).toBeDefined()
+    expect(pane().tabClusters).toEqual([CLUSTER])
   })
 })

@@ -13,16 +13,11 @@ export type TabBarStripItem =
 
 export function buildTabBarStripItems(
   items: readonly TabBarItem[],
-  group: Pick<TabGroup, 'id' | 'tabClusters' | 'activeTabId'> | null
+  group: Pick<TabGroup, 'id' | 'tabClusters' | 'activeTabId'> | null,
+  clusterByTabId: ReadonlyMap<string, TabCluster>
 ): TabBarStripItem[] {
   if (!group?.tabClusters?.length) {
     return [...items]
-  }
-  const clusterByTabId = new Map<string, TabCluster>()
-  for (const cluster of group.tabClusters) {
-    for (const tabId of cluster.tabIds) {
-      clusterByTabId.set(tabId, cluster)
-    }
   }
   const hiddenTabIds = getHiddenClusterTabIds(group)
   const renderedClusterIds = new Set<string>()

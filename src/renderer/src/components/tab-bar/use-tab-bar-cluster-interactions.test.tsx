@@ -5,24 +5,31 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab, TabCluster, TabGroup } from '../../../../shared/tab-types'
 import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
 import type { AppState } from '@/store/types'
+import {
+  createTestStore,
+  makeLayout,
+  makeTabGroup,
+  makeUnifiedTab,
+  seedStore,
+  type TestStore
+} from '@/store/slices/store-test-helpers'
 import type { TabBarItem } from './tab-bar-item-model'
 import type { TabBarProps } from './tab-bar-props'
 import { useTabBarClusterInteractions } from './use-tab-bar-cluster-interactions'
 
-const { getStateMock, inspectRuntimeTerminalProcessMock } = vi.hoisted(() => ({
-  getStateMock: vi.fn(),
-  inspectRuntimeTerminalProcessMock: vi.fn()
-}))
+let store: TestStore
+let probeClock = 0
+const inspectRuntimeTerminalProcessMock = vi.hoisted(() => vi.fn())
 
+vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/store', () => ({
-  useAppStore: Object.assign((selector: (state: AppState) => unknown) => selector(getStateMock()), {
-    getState: getStateMock
+  useAppStore: Object.assign((selector: (state: AppState) => unknown) => store(selector), {
+    getState: () => store.getState()
   })
 }))
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   inspectRuntimeTerminalProcess: inspectRuntimeTerminalProcessMock
 }))
-vi.mock('@/lib/workspace-tab-commands', () => ({ dispatchWorkspaceTabCommand: vi.fn() }))
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
 const CLUSTER: TabCluster = {
@@ -96,35 +103,48 @@ const UNIFIED_TABS: Tab[] = ITEMS.map((item, sortOrder) => ({
   sortOrder,
   createdAt: 0
 }))
+const noop = (): void => {}
 const PROPS: TabBarProps = {
   tabs: [],
   activeTabId: 'terminal-outside',
   worktreeId: 'wt',
   expandedPaneByTabId: {},
-  onActivate: vi.fn(),
-  onClose: vi.fn(),
-  onCloseOthers: vi.fn(),
-  onCloseToRight: vi.fn(),
-  onCloseToLeft: vi.fn(),
-  onNewTerminalTab: vi.fn(),
-  onNewBrowserTab: vi.fn(),
-  onSetCustomTitle: vi.fn(),
-  onSetTabColor: vi.fn(),
-  onTogglePaneExpand: vi.fn()
+  onActivate: noop,
+  onClose: noop,
+  onCloseOthers: noop,
+  onCloseToRight: noop,
+  onCloseToLeft: noop,
+  onNewTerminalTab: noop,
+  onNewBrowserTab: noop,
+  onSetCustomTitle: noop,
+  onSetTabColor: noop,
+  onTogglePaneExpand: noop
 }
 
-function mount(props: TabBarProps, allItems = ITEMS) {
+function mount(group = GROUP, allItems = ITEMS) {
   return renderHook(() =>
     useTabBarClusterInteractions({
-      props,
-      groupId: GROUP.id,
-      group: GROUP,
-      groups: [GROUP],
+      props: {
+        ...PROPS,
+        worktreeId: group.worktreeId,
+        onCloseTabs: (tabIds) => {
+          for (const tabId of tabIds) {
+            store.getState().closeUnifiedTab(tabId, { terminalRetirementHandled: true })
+          }
+        }
+      },
+      groupId: group.id,
+      group,
       allItems,
-      visibleItems: ITEMS.filter((item) => item.unifiedTabId === 'outside'),
+      visibleItems: allItems.filter((item) => item.unifiedTabId === group.activeTabId),
       activeVisibleTabId: 'terminal-outside'
     })
   )
+}
+
+function tabOrder(groupId = 'pane', worktreeId = 'wt'): string[] | undefined {
+  return store.getState().groupsByWorktree[worktreeId]?.find((group) => group.id === groupId)
+    ?.tabOrder
 }
 
 async function settleProbe(): Promise<void> {
@@ -137,20 +157,32 @@ async function settleProbe(): Promise<void> {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  getStateMock.mockReturnValue({
-    settings: { activeRuntimeEnvironmentId: null },
-    tabSelectionByGroupId: {},
+  probeClock += 10_000
+  vi.useFakeTimers({ now: probeClock })
+  store = createTestStore()
+  seedStore(store, {
     unifiedTabsByWorktree: { wt: UNIFIED_TABS },
+    groupsByWorktree: { wt: [GROUP] },
     ptyIdsByTabId: {
       'terminal-first': ['pty-first'],
       'terminal-second': ['pty-second'],
       'terminal-outside': ['pty-outside']
     },
     terminalLayoutsByTabId: {
-      'terminal-first': { ptyIdsByLeafId: { [LEAF]: 'pty-first' } },
-      'terminal-second': { ptyIdsByLeafId: { [LEAF]: 'pty-second' } }
+      'terminal-first': { ...makeLayout(), ptyIdsByLeafId: { [LEAF]: 'pty-first' } },
+      'terminal-second': { ...makeLayout(), ptyIdsByLeafId: { [LEAF]: 'pty-second' } }
     },
-    agentStatusByPaneKey: { [`terminal-second:${LEAF}`]: { agentType: 'claude' } }
+    agentStatusByPaneKey: {
+      [`terminal-second:${LEAF}`]: {
+        paneKey: `terminal-second:${LEAF}`,
+        agentType: 'claude',
+        state: 'working',
+        prompt: '',
+        updatedAt: 0,
+        stateStartedAt: 0,
+        stateHistory: []
+      }
+    }
   })
   inspectRuntimeTerminalProcessMock.mockResolvedValue({
     foregroundProcess: 'sleep',
@@ -160,54 +192,42 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
-  const store = useRunningTerminalCloseConfirmStore.getState()
   while (useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm) {
-    store.dismissRunningTerminalClose()
+    vi.advanceTimersByTime(350)
+    useRunningTerminalCloseConfirmStore.getState().dismissRunningTerminalClose()
   }
+  vi.useRealTimers()
 })
 
 describe('closeCluster', () => {
   it('bulk-closes every collapsed member only after the group confirmation', async () => {
-    const onCloseTabs = vi.fn()
-    const onCloseTab = vi.fn()
-    const { result } = mount({ ...PROPS, onCloseTabs, onCloseTab })
-
+    const { result } = mount()
     act(() => result.current.closeCluster(CLUSTER))
-    expect(onCloseTabs).not.toHaveBeenCalled()
-    expect(onCloseTab).not.toHaveBeenCalled()
+    expect(tabOrder()).toEqual(GROUP.tabOrder)
     await settleProbe()
 
-    const store = useRunningTerminalCloseConfirmStore.getState()
-    expect(store.runningTerminalCloseConfirm).toMatchObject({
-      terminalTabId: 'tab-cluster:cluster',
+    expect(
+      useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm
+    ).toMatchObject({
       tabLabel: 'Development',
       groupTerminals: [
         { terminalTabId: 'terminal-first', tabLabel: 'Build', copyKind: 'command' },
         { terminalTabId: 'terminal-second', tabLabel: 'Review changes', copyKind: 'agent' }
       ]
     })
-    expect(onCloseTabs).not.toHaveBeenCalled()
-    act(() => store.confirmRunningTerminalClose())
-
-    expect(onCloseTabs).toHaveBeenCalledTimes(1)
-    expect(onCloseTabs).toHaveBeenCalledWith(CLUSTER.tabIds)
-    expect(onCloseTab).not.toHaveBeenCalled()
-    expect(PROPS.onClose).not.toHaveBeenCalled()
+    expect(tabOrder()).toEqual(GROUP.tabOrder)
+    act(() => useRunningTerminalCloseConfirmStore.getState().confirmRunningTerminalClose())
+    expect(tabOrder()).toEqual(['outside'])
+    expect(store.getState().unifiedTabsByWorktree.wt.map((tab) => tab.id)).toEqual(['outside'])
     expect(useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm).toBeNull()
   })
 
   it('cancelling the group prompt leaves every hidden member open', async () => {
-    const onCloseTabs = vi.fn()
-    const onCloseTab = vi.fn()
-    const { result } = mount({ ...PROPS, onCloseTabs, onCloseTab })
-
+    const { result } = mount()
     act(() => result.current.closeCluster(CLUSTER))
     await settleProbe()
     act(() => useRunningTerminalCloseConfirmStore.getState().dismissRunningTerminalClose())
-
-    expect(onCloseTabs).not.toHaveBeenCalled()
-    expect(onCloseTab).not.toHaveBeenCalled()
-    expect(PROPS.onClose).not.toHaveBeenCalled()
+    expect(tabOrder()).toEqual(GROUP.tabOrder)
     expect(useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm).toBeNull()
   })
 
@@ -216,27 +236,20 @@ describe('closeCluster', () => {
       foregroundProcess: 'zsh',
       hasChildProcesses: false
     })
-    const onCloseTabs = vi.fn()
-    const { result } = mount({ ...PROPS, onCloseTabs })
-
+    const { result } = mount()
     act(() => result.current.closeCluster(CLUSTER))
     await settleProbe()
-
-    expect(onCloseTabs).toHaveBeenCalledTimes(1)
-    expect(onCloseTabs).toHaveBeenCalledWith(CLUSTER.tabIds)
+    expect(tabOrder()).toEqual(['outside'])
     expect(useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm).toBeNull()
   })
 
   it('still guards a host-backed member absent from the strip projection', async () => {
-    const onCloseTabs = vi.fn()
     const { result } = mount(
-      { ...PROPS, onCloseTabs },
+      GROUP,
       ITEMS.filter((item) => item.unifiedTabId !== 'unified-second')
     )
-
     act(() => result.current.closeCluster({ ...CLUSTER, name: '' }))
     await settleProbe()
-
     expect(
       useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm
     ).toMatchObject({
@@ -246,6 +259,85 @@ describe('closeCluster', () => {
         { terminalTabId: 'terminal-second', tabLabel: 'Review changes' }
       ]
     })
-    expect(onCloseTabs).not.toHaveBeenCalled()
+    expect(tabOrder()).toEqual(GROUP.tabOrder)
   })
+
+  it.each([
+    { label: 'different panes', groupId: 'other-pane', worktreeId: 'wt' },
+    { label: 'different worktrees', groupId: 'pane', worktreeId: 'other-wt' }
+  ])(
+    'keeps matching-id groups in $label behind separate prompts',
+    async ({ groupId, worktreeId }) => {
+      const otherCluster: TabCluster = { ...CLUSTER, name: 'Other group', tabIds: ['other-tab'] }
+      const otherGroup = makeTabGroup({
+        id: groupId,
+        worktreeId,
+        activeTabId: 'other-tab',
+        tabOrder: ['other-tab', 'other-outside'],
+        tabClusters: [otherCluster]
+      })
+      const state = store.getState()
+      seedStore(store, {
+        groupsByWorktree: {
+          ...state.groupsByWorktree,
+          [worktreeId]: [...(state.groupsByWorktree[worktreeId] ?? []), otherGroup]
+        },
+        unifiedTabsByWorktree: {
+          ...state.unifiedTabsByWorktree,
+          [worktreeId]: [
+            ...(state.unifiedTabsByWorktree[worktreeId] ?? []),
+            makeUnifiedTab({
+              id: 'other-tab',
+              entityId: 'other-terminal',
+              groupId,
+              worktreeId,
+              label: 'Other task'
+            }),
+            makeUnifiedTab({ id: 'other-outside', groupId, worktreeId })
+          ]
+        },
+        ptyIdsByTabId: { ...state.ptyIdsByTabId, 'other-terminal': ['other-pty'] }
+      })
+      const resolveProbes: (() => void)[] = []
+      inspectRuntimeTerminalProcessMock.mockImplementation(
+        () =>
+          new Promise<{ foregroundProcess: string; hasChildProcesses: boolean }>((resolve) => {
+            resolveProbes.push(() =>
+              resolve({ foregroundProcess: 'sleep', hasChildProcesses: true })
+            )
+          })
+      )
+      const first = mount()
+      const second = mount(otherGroup, [])
+      act(() => {
+        first.result.current.closeCluster(CLUSTER)
+        second.result.current.closeCluster(otherCluster)
+      })
+      expect(useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm).toBeNull()
+      act(() => resolveProbes.splice(0, 2).forEach((resolve) => resolve()))
+      await settleProbe()
+      expect(
+        useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm?.tabLabel
+      ).toBe('Development')
+      act(() => resolveProbes.forEach((resolve) => resolve()))
+      await settleProbe()
+
+      act(() => useRunningTerminalCloseConfirmStore.getState().confirmRunningTerminalClose())
+      expect(tabOrder()).toEqual(['outside'])
+      expect(tabOrder(groupId, worktreeId)).toEqual(['other-tab', 'other-outside'])
+      expect(
+        useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm
+      ).toMatchObject({
+        tabLabel: 'Other group',
+        groupTerminals: [{ terminalTabId: 'other-terminal', tabLabel: 'Other task' }]
+      })
+      act(() => {
+        vi.advanceTimersByTime(350)
+        useRunningTerminalCloseConfirmStore.getState().confirmRunningTerminalClose()
+      })
+      expect(tabOrder(groupId, worktreeId)).toEqual(['other-outside'])
+      expect(tabOrder()).toEqual(['outside'])
+      expect(useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm).toBeNull()
+    }
+  )
 })

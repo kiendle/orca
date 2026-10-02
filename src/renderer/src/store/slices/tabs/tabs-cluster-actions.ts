@@ -2,6 +2,7 @@ import { TAB_CLUSTER_COLORS, type TabCluster } from '../../../../../shared/tab-t
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { findGroupAndWorktree, updateGroup } from '../tab-group-state'
 import { createTabClusterId, isTabClusterColor } from './tab-cluster-model'
+import { normalizeTabStripSelection } from './tab-cluster-invariant'
 import {
   buildTabClusterStripMove,
   createTabsClusterStripActions,
@@ -72,35 +73,19 @@ export function createTabsClusterActions(
     setTabSelection: (groupId, selection) => {
       set((state) => {
         const found = findGroupAndWorktree(state.groupsByWorktree, groupId)
-        const requested = new Set(selection?.tabIds)
         const liveIds = new Set(
           (state.unifiedTabsByWorktree[found?.worktreeId ?? ''] ?? [])
             .filter((tab) => tab.groupId === groupId)
             .map((tab) => tab.id)
         )
-        const tabIds =
-          found?.group.tabOrder.filter((id) => requested.has(id) && liveIds.has(id)) ?? []
-        const anchorTabId =
-          selection?.anchorTabId &&
-          liveIds.has(selection.anchorTabId) &&
-          found?.group.tabOrder.includes(selection.anchorTabId)
-            ? selection.anchorTabId
-            : null
         const previous = state.tabSelectionByGroupId[groupId]
-        if (!tabIds.length && !previous) {
-          return state
-        }
-        if (
-          previous &&
-          tabIds.length === previous.tabIds.length &&
-          tabIds.every((id, index) => id === previous.tabIds[index]) &&
-          anchorTabId === previous.anchorTabId
-        ) {
+        const normalized = normalizeTabStripSelection(selection, found?.group, liveIds, previous)
+        if (normalized === previous) {
           return state
         }
         const tabSelectionByGroupId = { ...state.tabSelectionByGroupId }
-        if (tabIds.length) {
-          tabSelectionByGroupId[groupId] = { tabIds, anchorTabId }
+        if (normalized) {
+          tabSelectionByGroupId[groupId] = normalized
         } else {
           delete tabSelectionByGroupId[groupId]
         }
@@ -126,6 +111,17 @@ export function createTabsClusterActions(
           return state
         }
         const existing = found.group.tabClusters ?? []
+        const memberIds = new Set(members)
+        const remainingOrder = found.group.tabOrder.filter((id) => !memberIds.has(id))
+        const sourceCluster = existing.find((cluster) => cluster.tabIds.includes(members[0]))
+        const lastRemainingMember = sourceCluster?.tabIds.findLast((id) => !memberIds.has(id))
+        let index = found.group.tabOrder.indexOf(members[0])
+        if (sourceCluster && sourceCluster.tabIds[0] !== members[0] && lastRemainingMember) {
+          const sourceEnd = remainingOrder.indexOf(lastRemainingMember)
+          if (index <= sourceEnd) {
+            index = sourceEnd + 1
+          }
+        }
         const usedColors = new Set(existing.map((cluster) => cluster.color))
         const color =
           init?.color && isTabClusterColor(init.color)
@@ -144,7 +140,7 @@ export function createTabsClusterActions(
           { ...found.group, tabClusters: [...existing, cluster] },
           tabs,
           members,
-          { index: found.group.tabOrder.indexOf(members[0]), clusterId: id }
+          { index, clusterId: id }
         )
         if (!next) {
           return state

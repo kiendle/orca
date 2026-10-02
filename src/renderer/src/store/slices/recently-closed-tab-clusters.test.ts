@@ -119,7 +119,8 @@ describe('reopening closed cluster members', () => {
   it('rejoins a surviving cluster that moved away from the captured index', () => {
     const { store, clusterId, groupId, anchorTabId, outsideTabId } =
       closeClusteredMember('terminal')
-    expect(store.getState().moveTabCluster(groupId, clusterId, { groupId, index: 1 })).toBe(true)
+    // Why: same-pane group drags commit through moveTabsInStrip.
+    store.getState().moveTabsInStrip(groupId, [anchorTabId], { index: 1, clusterId })
     expect(store.getState().reopenClosedTab(WT)).toBe(true)
     const restored = store.getState().getActiveTab(WT)
     if (!restored) {

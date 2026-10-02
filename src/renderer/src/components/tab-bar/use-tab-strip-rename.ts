@@ -6,15 +6,13 @@ import {
 
 export function useTabStripRename({
   value,
-  onCommit,
-  autoStart = false
+  onCommit
 }: {
   value: string
   onCommit: (value: string) => void
-  autoStart?: boolean
 }) {
-  const [isEditing, setIsEditing] = useState(autoStart)
-  const [renameValue, setRenameValue] = useState(autoStart ? value : '')
+  const [isEditing, setIsEditing] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
   const renameFocusFrameRef = useRef<number | null>(null)
   const resolvedRef = useRef(false)
   const imeEnter = useImeEnterGestureOwnership()
