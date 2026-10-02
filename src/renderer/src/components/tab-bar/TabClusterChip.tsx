@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -51,8 +51,18 @@ export function TabClusterChip({
   }
   const { attributes, listeners, setNodeRef } = useSortable({ id: sortableId, data: dragData })
   const toggleCollapsed = (): void => setCollapsed(groupId, cluster.id, !cluster.collapsed)
+  const clickCountRef = useRef(0)
   const { onPointerDown } = useTabStripPointerActivation({
-    onActivate: toggleCollapsed,
+    onActivate: () => {
+      const clickCount = clickCountRef.current
+      clickCountRef.current = 0
+      // Why: Collapse updates can lose the browser's dblclick before React receives it.
+      if (clickCount >= 2) {
+        rename.handleRenameOpen()
+      } else {
+        toggleCollapsed()
+      }
+    },
     disabled: rename.isEditing
   })
 
@@ -82,9 +92,13 @@ export function TabClusterChip({
         'relative flex h-full shrink-0 cursor-pointer select-none items-center gap-1.5 px-2 text-xs text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
         getDropIndicatorClasses(dropIndicator ?? null)
       )}
-      onPointerDown={(event) =>
+      onPointerDown={(event) => {
+        clickCountRef.current = 0
         onPointerDown(event, (dragEvent) => listeners?.onPointerDown?.(dragEvent))
-      }
+      }}
+      onMouseDown={(event) => {
+        clickCountRef.current = event.detail
+      }}
       onClick={(event) => {
         if (event.detail === 0 && !rename.isEditing) {
           toggleCollapsed()
@@ -100,7 +114,7 @@ export function TabClusterChip({
       }}
       onDoubleClick={(event) => {
         event.stopPropagation()
-        if (!rename.isEditing) {
+        if (clickCountRef.current === 0 && !rename.isEditing) {
           rename.handleRenameOpen()
         }
       }}

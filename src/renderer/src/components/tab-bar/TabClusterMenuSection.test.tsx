@@ -108,7 +108,15 @@ describe('cluster grouping menu targets', () => {
 
 describe('cluster grouping menu labels and availability', () => {
   it('names a single-tab action and shows an unnamed existing cluster', () => {
-    render(<TabClusterMenuSection worktreeId="wt" groupId="pane" tabId="a" isPinned={false} />)
+    render(
+      <TabClusterMenuSection
+        worktreeId="wt"
+        groupId="pane"
+        tabId="a"
+        isPinned={false}
+        onQueueNewCluster={() => {}}
+      />
+    )
     expect(
       screen.getByRole('menuitem', { name: 'Add Tab to New Group' }).hasAttribute('disabled')
     ).toBe(false)
@@ -118,20 +126,44 @@ describe('cluster grouping menu labels and availability', () => {
 
   it('names the whole selection when a selected member is right-clicked', () => {
     model.tabSelectionByGroupId = { pane: { tabIds: ['a', 'b', 'c'], anchorTabId: 'a' } }
-    render(<TabClusterMenuSection worktreeId="wt" groupId="pane" tabId="b" isPinned={false} />)
+    render(
+      <TabClusterMenuSection
+        worktreeId="wt"
+        groupId="pane"
+        tabId="b"
+        isPinned={false}
+        onQueueNewCluster={() => {}}
+      />
+    )
     expect(screen.getByRole('menuitem', { name: 'Add 3 Tabs to New Group' })).toBeDefined()
     expect(screen.getByRole('menuitem', { name: 'Remove from Group' })).toBeDefined()
   })
 
   it('does not let an unrelated highlighted selection change a single-tab menu', () => {
     model.tabSelectionByGroupId = { pane: { tabIds: ['b', 'c'], anchorTabId: 'b' } }
-    render(<TabClusterMenuSection worktreeId="wt" groupId="pane" tabId="a" isPinned={false} />)
+    render(
+      <TabClusterMenuSection
+        worktreeId="wt"
+        groupId="pane"
+        tabId="a"
+        isPinned={false}
+        onQueueNewCluster={() => {}}
+      />
+    )
     expect(screen.getByRole('menuitem', { name: 'Add Tab to New Group' })).toBeDefined()
     expect(screen.queryByRole('menuitem', { name: 'Add 2 Tabs to New Group' })).toBeNull()
   })
 
   it('disables grouping for a pinned-only target', () => {
-    render(<TabClusterMenuSection worktreeId="wt" groupId="pane" tabId="a" isPinned />)
+    render(
+      <TabClusterMenuSection
+        worktreeId="wt"
+        groupId="pane"
+        tabId="a"
+        isPinned
+        onQueueNewCluster={() => {}}
+      />
+    )
     expect(
       screen.getByRole('menuitem', { name: 'Add Tab to New Group' }).hasAttribute('disabled')
     ).toBe(true)

@@ -24,6 +24,7 @@ import { translate } from '@/i18n/i18n'
 import { TerminalTabSplitMenuSection } from './TerminalTabSplitMenuSection'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { TabClusterMenuSection } from './TabClusterMenuSection'
+import { useTabClusterMenuCloseAction } from './use-tab-cluster-menu-close-action'
 
 const TAB_COLORS = [
   {
@@ -151,6 +152,7 @@ export function SortableTabContextMenu({
 
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
+  const clusterMenuAction = useTabClusterMenuCloseAction()
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
@@ -162,7 +164,12 @@ export function SortableTabContextMenu({
           style={{ left: point.x, top: point.y }}
         />
       </DropdownMenuTrigger>
-      <DropdownMenuContent className={TAB_CONTEXT_MENU_CONTENT_CLASS} sideOffset={0} align="start">
+      <DropdownMenuContent
+        className={TAB_CONTEXT_MENU_CONTENT_CLASS}
+        sideOffset={0}
+        align="start"
+        onCloseAutoFocus={clusterMenuAction.runAfterClose}
+      >
         <TerminalTabSplitMenuSection
           unifiedTabId={unifiedTabId}
           groupId={groupId}
@@ -211,6 +218,7 @@ export function SortableTabContextMenu({
             groupId={groupId}
             tabId={unifiedTabId}
             isPinned={isPinned}
+            onQueueNewCluster={clusterMenuAction.queueAfterClose}
           />
         ) : null}
         <DropdownMenuSeparator />

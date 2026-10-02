@@ -1,6 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as React from 'react'
 
 const shortcutLabelMock = vi.hoisted(() => vi.fn())
+
+// Why: This headless tree harness calls components directly rather than through a React renderer.
+vi.mock('react', async () => {
+  const actual = await vi.importActual<typeof React>('react')
+  return {
+    ...actual,
+    useRef<T>(value: T) {
+      return { current: value }
+    },
+    useCallback<T extends (...args: never[]) => unknown>(callback: T) {
+      return callback
+    }
+  }
+})
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: function DropdownMenu(props: { children?: unknown }) {

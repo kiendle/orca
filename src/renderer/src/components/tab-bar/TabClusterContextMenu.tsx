@@ -28,6 +28,7 @@ import { TAB_CLUSTER_COLORS, type TabCluster } from '../../../../shared/tab-type
 import { canSplitTabClusterLocally } from '../tab-group/tab-cluster-split-availability'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { TAB_CLUSTER_COLOR_CLASSES, TAB_CLUSTER_COLOR_LABELS } from './tab-cluster-colors'
+import { useTabClusterMenuCloseAction } from './use-tab-cluster-menu-close-action'
 
 export function TabClusterContextMenu({
   cluster,
@@ -53,6 +54,7 @@ export function TabClusterContextMenu({
   const setCollapsed = useAppStore((state) => state.setTabClusterCollapsed)
   const ungroup = useAppStore((state) => state.ungroupTabCluster)
   const moveCluster = useAppStore((state) => state.moveTabCluster)
+  const clusterMenuAction = useTabClusterMenuCloseAction()
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
       <DropdownMenuTrigger asChild>
@@ -67,9 +69,12 @@ export function TabClusterContextMenu({
         className={TAB_CONTEXT_MENU_CONTENT_CLASS}
         sideOffset={0}
         align="start"
-        onCloseAutoFocus={(event) => event.preventDefault()}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault()
+          clusterMenuAction.runAfterClose(event)
+        }}
       >
-        <DropdownMenuItem onSelect={onRename}>
+        <DropdownMenuItem onSelect={() => clusterMenuAction.queueAfterClose(onRename)}>
           <Pencil className="size-3.5" />
           {translate('components.tabCluster.rename', 'Rename Group')}
         </DropdownMenuItem>
