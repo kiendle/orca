@@ -95,6 +95,71 @@ describe('collapsed cluster sticky member', () => {
     expect(pane().tabClusters?.[0].shownTabId).toBeUndefined()
   })
 
+  it.each(['x', 'b'])(
+    'restores collapse and its original sticky member atomically with %s active',
+    (activeTabId) => {
+      seedPane()
+      store.getState().setTabClusterCollapsed(PANE, CLUSTER, true)
+      store.getState().setTabClusterCollapsed(PANE, CLUSTER, false)
+      store.getState().activateTab(activeTabId)
+      const observed: TabGroup['tabClusters'][] = []
+      const unsubscribe = store.subscribe((state) => {
+        observed.push(state.groupsByWorktree[WT][0].tabClusters)
+      })
+      store.getState().restoreTabClusterCollapseState(PANE, CLUSTER, {
+        collapsed: true,
+        shownTabId: 'a'
+      })
+      unsubscribe()
+      expect(observed).toEqual([
+        [
+          {
+            id: CLUSTER,
+            name: 'Work',
+            color: 'blue',
+            collapsed: true,
+            tabIds: ['a', 'b'],
+            shownTabId: 'a'
+          }
+        ]
+      ])
+      expect(pane().activeTabId).toBe(activeTabId)
+      expect([...getHiddenClusterTabIds(pane())]).toEqual(activeTabId === 'x' ? ['b'] : [])
+    }
+  )
+
+  it('restores the original sticky member even when the cluster is already collapsed', () => {
+    seedPane()
+    store.getState().setTabClusterCollapsed(PANE, CLUSTER, true)
+    store.getState().setTabClusterCollapsed(PANE, CLUSTER, false)
+    store.getState().activateTab('b')
+    store.getState().setTabClusterCollapsed(PANE, CLUSTER, true)
+    expect(pane().tabClusters?.[0].shownTabId).toBe('b')
+    store.getState().restoreTabClusterCollapseState(PANE, CLUSTER, {
+      collapsed: true,
+      shownTabId: 'a'
+    })
+    expect(pane().tabClusters?.[0].shownTabId).toBe('a')
+    expect(pane().activeTabId).toBe('b')
+  })
+
+  it('does not resurrect a sticky member removed before its collapse snapshot is restored', () => {
+    seedPane()
+    store.getState().setTabClusterCollapsed(PANE, CLUSTER, true)
+    store.getState().setTabClusterCollapsed(PANE, CLUSTER, false)
+    store.getState().activateTab('x')
+    store.getState().closeUnifiedTab('a')
+    store.getState().restoreTabClusterCollapseState(PANE, CLUSTER, {
+      collapsed: true,
+      shownTabId: 'a'
+    })
+    expect(pane().tabClusters).toEqual([
+      { id: CLUSTER, name: 'Work', color: 'blue', collapsed: true, tabIds: ['b'] }
+    ])
+    expect(pane().tabOrder).toEqual(['b', 'x'])
+    expect([...getHiddenClusterTabIds(pane())]).toEqual(['b'])
+  })
+
   it('closing the inactive sticky member removes only it without revealing another member', () => {
     seedPane()
     store.getState().setTabClusterCollapsed(PANE, CLUSTER, true)

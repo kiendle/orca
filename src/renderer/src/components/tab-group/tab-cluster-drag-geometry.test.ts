@@ -163,7 +163,7 @@ describe('cluster strip insertion indicators', () => {
       )
     ).toEqual({
       groupId: GROUP.id,
-      visibleTabId: getTabClusterSortableId(CLUSTER.id),
+      visibleTabId: getTabClusterSortableId(GROUP.id, CLUSTER.id),
       side: 'left'
     })
   })
@@ -210,7 +210,7 @@ describe('cluster strip insertion indicators', () => {
       )
     ).toEqual({
       groupId: GROUP.id,
-      visibleTabId: getTabClusterSortableId(CLUSTER.id),
+      visibleTabId: getTabClusterSortableId(GROUP.id, CLUSTER.id),
       side: 'right'
     })
   })
@@ -227,11 +227,45 @@ describe('cluster strip insertion indicators', () => {
         )
       ).toEqual({
         groupId: GROUP.id,
-        visibleTabId: side === 'left' ? getTabClusterSortableId(CLUSTER.id) : 'c',
+        visibleTabId: side === 'left' ? getTabClusterSortableId(GROUP.id, CLUSTER.id) : 'c',
         side
       })
     }
   )
+
+  it.each(['left', 'right'] as const)(
+    'marks the %s destination chip edge for an equal-id cluster from another pane',
+    (side) => {
+      const target: TabGroup = {
+        ...GROUP,
+        id: 'destination',
+        activeTabId: 'tail',
+        tabOrder: [...GROUP.tabOrder, 'tail'],
+        tabClusters: [{ ...CLUSTER, id: 'same', collapsed: true }]
+      }
+      expect(
+        resolveTabInsertion(
+          dragEvent(
+            { ...CHIP, groupId: 'source', clusterId: 'same' },
+            { ...CHIP, groupId: target.id, clusterId: 'same', collapsed: true }
+          ),
+          isTabDragData,
+          () => ({ x: side === 'left' ? 10 : 90, y: 10 }),
+          target
+        )
+      ).toEqual({
+        groupId: target.id,
+        visibleTabId: getTabClusterSortableId(target.id, 'same'),
+        side
+      })
+    }
+  )
+
+  it('suppresses a chip insertion indicator over its own chip', () => {
+    expect(
+      resolveTabInsertion(dragEvent(CHIP, CHIP), isTabDragData, () => ({ x: 10, y: 10 }))
+    ).toBeNull()
+  })
 
   it('suppresses a chip insertion indicator over one of its own members', () => {
     expect(

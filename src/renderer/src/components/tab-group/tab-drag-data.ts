@@ -36,8 +36,8 @@ export type TabClusterDragItemData = {
 
 export type TabStripDragItemData = TabDragItemData | TabClusterDragItemData
 
-export function getTabClusterSortableId(clusterId: string): string {
-  return `tab-cluster:${clusterId}`
+export function getTabClusterSortableId(groupId: string, clusterId: string): string {
+  return `tab-cluster:${groupId}:${clusterId}`
 }
 
 export function isTabClusterDragData(value: unknown): value is TabClusterDragItemData {

@@ -13,7 +13,7 @@ export type TabBarStripItem =
 
 export function buildTabBarStripItems(
   items: readonly TabBarItem[],
-  group: Pick<TabGroup, 'tabClusters' | 'activeTabId'> | null
+  group: Pick<TabGroup, 'id' | 'tabClusters' | 'activeTabId'> | null
 ): TabBarStripItem[] {
   if (!group?.tabClusters?.length) {
     return [...items]
@@ -30,7 +30,11 @@ export function buildTabBarStripItems(
   for (const item of items) {
     const cluster = clusterByTabId.get(item.unifiedTabId)
     if (cluster && !renderedClusterIds.has(cluster.id)) {
-      stripItems.push({ type: 'cluster', id: getTabClusterSortableId(cluster.id), data: cluster })
+      stripItems.push({
+        type: 'cluster',
+        id: getTabClusterSortableId(group.id, cluster.id),
+        data: cluster
+      })
       renderedClusterIds.add(cluster.id)
     }
     if (!hiddenTabIds.has(item.unifiedTabId)) {

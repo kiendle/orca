@@ -33,10 +33,14 @@ const CLUSTER: TabCluster = {
 
 describe('tab strip cluster projection', () => {
   it('inserts one chip before the first member and leaves ungrouped order alone', () => {
-    const strip = buildTabBarStripItems(ITEMS, { activeTabId: 'a', tabClusters: [CLUSTER] })
+    const strip = buildTabBarStripItems(ITEMS, {
+      id: 'pane',
+      activeTabId: 'a',
+      tabClusters: [CLUSTER]
+    })
     expect(strip.map((item) => item.id)).toEqual([
       'visible-a',
-      'tab-cluster:cluster',
+      'tab-cluster:pane:cluster',
       'visible-b',
       'visible-c',
       'visible-d',
@@ -47,12 +51,13 @@ describe('tab strip cluster projection', () => {
 
   it('renders a collapsed chip and only its active member as sortable strip items', () => {
     const strip = buildTabBarStripItems(ITEMS, {
+      id: 'pane',
       activeTabId: 'd',
       tabClusters: [{ ...CLUSTER, collapsed: true }]
     })
     expect(strip.map((item) => item.id)).toEqual([
       'visible-a',
-      'tab-cluster:cluster',
+      'tab-cluster:pane:cluster',
       'visible-d',
       'visible-e'
     ])
@@ -60,10 +65,15 @@ describe('tab strip cluster projection', () => {
 
   it('retains a collapsed chip even when no member is the active tab', () => {
     const strip = buildTabBarStripItems(ITEMS, {
+      id: 'pane',
       activeTabId: 'a',
       tabClusters: [{ ...CLUSTER, collapsed: true }]
     })
-    expect(strip.map((item) => item.id)).toEqual(['visible-a', 'tab-cluster:cluster', 'visible-e'])
+    expect(strip.map((item) => item.id)).toEqual([
+      'visible-a',
+      'tab-cluster:pane:cluster',
+      'visible-e'
+    ])
   })
 
   it('places adjacent cluster chips in canonical member order, regardless of metadata order', () => {
@@ -75,16 +85,18 @@ describe('tab strip cluster projection', () => {
       tabIds: ['e']
     }
     expect(
-      buildTabBarStripItems(ITEMS, { activeTabId: 'a', tabClusters: [second, CLUSTER] }).map(
-        (item) => item.id
-      )
+      buildTabBarStripItems(ITEMS, {
+        id: 'pane',
+        activeTabId: 'a',
+        tabClusters: [second, CLUSTER]
+      }).map((item) => item.id)
     ).toEqual([
       'visible-a',
-      'tab-cluster:cluster',
+      'tab-cluster:pane:cluster',
       'visible-b',
       'visible-c',
       'visible-d',
-      'tab-cluster:second',
+      'tab-cluster:pane:second',
       'visible-e'
     ])
   })
@@ -92,9 +104,23 @@ describe('tab strip cluster projection', () => {
   it('does not show an orphan chip when its entire cluster is absent from the rendered content', () => {
     expect(
       buildTabBarStripItems([ITEMS[0]!, ITEMS[4]!], {
+        id: 'pane',
         activeTabId: 'a',
         tabClusters: [CLUSTER]
       }).map((item) => item.id)
     ).toEqual(['visible-a', 'visible-e'])
+  })
+
+  it('gives equal-id clusters in different panes distinct sortable identities', () => {
+    const chipIds = ['source', 'target'].map((groupId) => {
+      const tabId = `${groupId}-tab`
+      const strip = buildTabBarStripItems([terminalItem(tabId)], {
+        id: groupId,
+        activeTabId: null,
+        tabClusters: [{ ...CLUSTER, id: 'same', collapsed: true, tabIds: [tabId] }]
+      })
+      return strip.find((item) => item.type === 'cluster')?.id
+    })
+    expect(chipIds).toEqual(['tab-cluster:source:same', 'tab-cluster:target:same'])
   })
 })

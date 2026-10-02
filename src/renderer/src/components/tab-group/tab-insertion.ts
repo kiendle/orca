@@ -57,6 +57,7 @@ export function resolveTabInsertion(
     (activeIsTab && overIsTab && activeData.unifiedTabId === overData.unifiedTabId) ||
     (isTabClusterDragData(activeData) &&
       isTabClusterDragData(overData) &&
+      activeData.groupId === overData.groupId &&
       activeData.clusterId === overData.clusterId)
   ) {
     return null
@@ -68,7 +69,9 @@ export function resolveTabInsertion(
   const midpoint = event.over.rect.left + event.over.rect.width / 2
   const insertion: HoveredTabInsertion = {
     groupId: overData.groupId,
-    visibleTabId: overIsTab ? overData.visibleTabId : getTabClusterSortableId(overData.clusterId),
+    visibleTabId: overIsTab
+      ? overData.visibleTabId
+      : getTabClusterSortableId(overData.groupId, overData.clusterId),
     side: center.x < midpoint ? 'left' : 'right'
   }
   return targetGroup
@@ -103,13 +106,13 @@ function resolveClusterIndicator(
       overData.unifiedTabId === cluster.tabIds[0] &&
       target.clusterId !== cluster.id
     ) {
-      return { ...insertion, visibleTabId: getTabClusterSortableId(cluster.id) }
+      return { ...insertion, visibleTabId: getTabClusterSortableId(targetGroup.id, cluster.id) }
     }
     return insertion
   }
   const side = isTabClusterDragData(activeDrag) ? insertion.side : 'right'
   if (side === 'left') {
-    return { ...insertion, visibleTabId: getTabClusterSortableId(cluster.id), side }
+    return { ...insertion, visibleTabId: getTabClusterSortableId(targetGroup.id, cluster.id), side }
   }
   const hidden = getHiddenClusterTabIds(targetGroup)
   const lastVisibleMember = cluster.tabIds.findLast((id) => !hidden.has(id))
@@ -124,7 +127,7 @@ function resolveClusterIndicator(
       lastVisibleTab.contentType === 'agent-session'
       ? lastVisibleTab.entityId
       : lastVisibleTab.id
-    : (lastVisibleMember ?? getTabClusterSortableId(cluster.id))
+    : (lastVisibleMember ?? getTabClusterSortableId(targetGroup.id, cluster.id))
   return { ...insertion, visibleTabId, side }
 }
 

@@ -21,6 +21,7 @@ export function createTabsClusterActions(
   | 'renameTabCluster'
   | 'setTabClusterColor'
   | 'setTabClusterCollapsed'
+  | 'restoreTabClusterCollapseState'
   | 'ungroupTabCluster'
   | 'moveTabsInStrip'
   | 'moveTabCluster'
@@ -28,7 +29,7 @@ export function createTabsClusterActions(
   const patchCluster = (
     groupId: string,
     clusterId: string,
-    patch: Partial<Pick<TabCluster, 'name' | 'color' | 'collapsed'>>
+    patch: Partial<Pick<TabCluster, 'name' | 'color' | 'collapsed' | 'shownTabId'>>
   ): void => {
     set((state) => {
       const found = findGroupAndWorktree(state.groupsByWorktree, groupId)
@@ -36,22 +37,21 @@ export function createTabsClusterActions(
       if (!found || !cluster) {
         return state
       }
+      const restoresShownTabId = Object.hasOwn(patch, 'shownTabId')
       if (
         (patch.name === undefined || patch.name === cluster.name) &&
         (patch.color === undefined || patch.color === cluster.color) &&
-        (patch.collapsed === undefined || patch.collapsed === cluster.collapsed)
+        (patch.collapsed === undefined || patch.collapsed === cluster.collapsed) &&
+        (!restoresShownTabId || patch.shownTabId === cluster.shownTabId)
       ) {
         return state
       }
       const nextCluster = { ...cluster, ...patch }
       if (patch.collapsed !== undefined) {
         delete nextCluster.shownTabId
-        if (
-          patch.collapsed &&
-          found.group.activeTabId !== null &&
-          cluster.tabIds.includes(found.group.activeTabId)
-        ) {
-          nextCluster.shownTabId = found.group.activeTabId
+        const shownTabId = restoresShownTabId ? patch.shownTabId : found.group.activeTabId
+        if (patch.collapsed && shownTabId && cluster.tabIds.includes(shownTabId)) {
+          nextCluster.shownTabId = shownTabId
         }
       }
       return {
@@ -173,6 +173,11 @@ export function createTabsClusterActions(
     },
     setTabClusterCollapsed: (groupId, clusterId, collapsed) =>
       patchCluster(groupId, clusterId, { collapsed }),
+    restoreTabClusterCollapseState: (groupId, clusterId, snapshot) =>
+      patchCluster(groupId, clusterId, {
+        collapsed: snapshot.collapsed,
+        shownTabId: snapshot.shownTabId
+      }),
 
     ungroupTabCluster: (groupId, clusterId) => {
       set((state) => {

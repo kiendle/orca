@@ -28,9 +28,10 @@ export function resolveTabClusterDropTarget({
   }
 
   const samePane = activeDrag.groupId === targetGroup.id
-  const activeCluster = isTabClusterDragData(activeDrag)
-    ? targetGroup.tabClusters?.find((cluster) => cluster.id === activeDrag.clusterId)
-    : null
+  const activeCluster =
+    samePane && isTabClusterDragData(activeDrag)
+      ? targetGroup.tabClusters?.find((cluster) => cluster.id === activeDrag.clusterId)
+      : null
   const movedTabIds = new Set(
     samePane
       ? isTabClusterDragData(activeDrag)
@@ -48,7 +49,7 @@ export function resolveTabClusterDropTarget({
     if (samePane && !activeCluster) {
       return null
     }
-    if (hoveredCluster?.id === activeDrag.clusterId) {
+    if (samePane && hoveredCluster?.id === activeDrag.clusterId) {
       return null
     }
     if (hoveredCluster) {

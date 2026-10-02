@@ -1,5 +1,8 @@
 import { useCallback, useRef, useState } from 'react'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
+import {
+  isImeCompositionKeyDown,
+  useImeEnterGestureOwnership
+} from '@/lib/ime-composition-keyboard-event'
 
 export function useTabStripRename({
   value,
@@ -14,13 +17,15 @@ export function useTabStripRename({
   const [renameValue, setRenameValue] = useState(autoStart ? value : '')
   const renameFocusFrameRef = useRef<number | null>(null)
   const resolvedRef = useRef(false)
+  const imeEnter = useImeEnterGestureOwnership()
 
   const handleRenameOpen = useCallback(() => {
     resolvedRef.current = false
+    imeEnter.reset()
     // Why: background title updates must not replace a name the user is editing.
     setRenameValue(value)
     setIsEditing(true)
-  }, [value])
+  }, [imeEnter, value])
 
   const commitRename = useCallback(() => {
     if (resolvedRef.current) {
@@ -28,14 +33,16 @@ export function useTabStripRename({
     }
     // Why: the input's trailing blur must not commit after Enter or Escape.
     resolvedRef.current = true
+    imeEnter.reset()
     onCommit(renameValue.trim())
     setIsEditing(false)
-  }, [onCommit, renameValue])
+  }, [imeEnter, onCommit, renameValue])
 
   const cancelRename = useCallback(() => {
     resolvedRef.current = true
+    imeEnter.reset()
     setIsEditing(false)
-  }, [])
+  }, [imeEnter])
 
   const setRenameInputElement = useCallback((input: HTMLInputElement | null) => {
     if (renameFocusFrameRef.current !== null) {
@@ -55,7 +62,7 @@ export function useTabStripRename({
 
   const onRenameKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
     event.stopPropagation()
-    if (isImeCompositionKeyDown(event)) {
+    if (imeEnter.ownsKeyDown(event) || imeEnter.isComposing() || isImeCompositionKeyDown(event)) {
       return
     }
     if (event.key === 'Enter') {
@@ -74,6 +81,9 @@ export function useTabStripRename({
     handleRenameOpen,
     commitRename,
     setRenameInputElement,
-    onRenameKeyDown
+    onRenameKeyDown,
+    onRenameKeyUp: imeEnter.onKeyUp,
+    onRenameCompositionStart: () => imeEnter.setComposing(true),
+    onRenameCompositionEnd: () => imeEnter.setComposing(false)
   }
 }

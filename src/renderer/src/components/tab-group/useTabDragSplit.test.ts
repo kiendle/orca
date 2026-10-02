@@ -308,7 +308,7 @@ describe('useTabDragSplit', () => {
     }
     const event: DragMoveEvent = {
       active: {
-        id: 'tab-cluster:cluster-1',
+        id: 'tab-cluster:group-1:cluster-1',
         data: { current: activeData },
         rect: { current: { initial: null, translated: null } }
       },

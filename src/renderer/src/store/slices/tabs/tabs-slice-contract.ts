@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type {
   Tab,
+  TabCluster,
   TabClusterColor,
   TabContentType,
   TabGroup,
@@ -195,6 +196,12 @@ export type TabsSlice = {
   renameTabCluster: (groupId: string, clusterId: string, name: string) => void
   setTabClusterColor: (groupId: string, clusterId: string, color: TabClusterColor) => void
   setTabClusterCollapsed: (groupId: string, clusterId: string, collapsed: boolean) => void
+  /** Double-click rename must undo collapse without recapturing the current active member. */
+  restoreTabClusterCollapseState: (
+    groupId: string,
+    clusterId: string,
+    snapshot: Pick<TabCluster, 'collapsed' | 'shownTabId'>
+  ) => void
   /** Drops the cluster; its tabs stay open in place. */
   ungroupTabCluster: (groupId: string, clusterId: string) => void
   /** Atomic same-pane reorder that also sets membership (null = ungrouped) of the moved tabs. */

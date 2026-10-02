@@ -4,7 +4,6 @@ import {
   dedupeTabOrder,
   findGroupForTab,
   findTabAndWorktree,
-  pickNextActiveTab,
   sanitizeRecentTabIds
 } from '../tab-group-state'
 import { buildActiveSurfacePatch } from './tabs-surface'
@@ -18,7 +17,7 @@ import {
 import { structuredAgentSessionTabId } from '../../../../../shared/structured-agent-session-projection'
 import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-focus-intent'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/local-structured-session-owner'
-import { getHiddenClusterTabIds } from './tab-cluster-model'
+import { pickTabCloseSuccessor } from './tab-close-successor'
 
 export function createTabsCloseActions(
   set: TabsSliceSet,
@@ -72,21 +71,7 @@ export function createTabsCloseActions(
       }
       let nextActiveTabId = group.activeTabId
       if (group.activeTabId === tabId) {
-        // Why: closing a visible tab must not reveal a collapsed member while another visible tab remains.
-        const hiddenTabIds =
-          !wasLastTab && group.tabClusters?.some((cluster) => cluster.collapsed)
-            ? getHiddenClusterTabIds(group)
-            : undefined
-        const visibleOrder = hiddenTabIds?.size
-          ? dedupedGroupOrder.filter((id) => !hiddenTabIds.has(id))
-          : dedupedGroupOrder
-        nextActiveTabId = wasLastTab
-          ? null
-          : pickNextActiveTab(
-              visibleOrder.length > 1 ? visibleOrder : dedupedGroupOrder,
-              group.recentTabIds,
-              tabId
-            )
+        nextActiveTabId = pickTabCloseSuccessor(group, dedupedGroupOrder, tabId)
       }
       const nextRecentTabIds = sanitizeRecentTabIds(
         (group.recentTabIds ?? []).filter((id) => id !== tabId),

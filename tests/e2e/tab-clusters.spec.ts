@@ -47,7 +47,7 @@ async function readCluster(page: Page, pane: ClusterPane, clusterId: string) {
   return (await readPane(page, pane))?.tabClusters?.find((cluster) => cluster.id === clusterId)
 }
 
-async function prepareTerminalPane(page: Page): Promise<ClusterPane> {
+async function prepareTerminalPane(page: Page, terminalCount = 3): Promise<ClusterPane> {
   await waitForSessionReady(page)
   await waitForStartupWorktreeRefresh(page)
   const worktreeId = await waitForActiveWorktree(page)
@@ -58,7 +58,7 @@ async function prepareTerminalPane(page: Page): Promise<ClusterPane> {
   }
   await expect(page.locator(`${SORTABLE_TAB}[data-tab-id="${initialTabId}"]`)).toBeVisible()
   // Why: the "+" menu is nonmodal and a just-spawned terminal's focus can close it mid-click.
-  for (let created = 0; created < 2; created += 1) {
+  for (let created = 1; created < terminalCount; created += 1) {
     const tabsBefore = await page.locator(SORTABLE_TAB).count()
     await page.evaluate(() => document.body.focus())
     await page.keyboard.press(`${selectionModifier}+t`)
@@ -67,7 +67,7 @@ async function prepareTerminalPane(page: Page): Promise<ClusterPane> {
     await waitForActivePanePtyId(page)
   }
 
-  await expect.poll(() => getWorktreeTabs(page, worktreeId)).toHaveLength(3)
+  await expect.poll(() => getWorktreeTabs(page, worktreeId)).toHaveLength(terminalCount)
   const pane = await page.evaluate((id) => {
     const state = window.__store?.getState()
     if (!state) {
@@ -87,23 +87,29 @@ async function prepareTerminalPane(page: Page): Promise<ClusterPane> {
     })
     return { worktreeId: id, groupId: group.id, tabs }
   }, worktreeId)
-  expect(pane.tabs).toHaveLength(3)
+  expect(pane.tabs).toHaveLength(terminalCount)
   for (const tab of pane.tabs) {
     await expect(terminalTab(page, pane.groupId, tab)).toBeVisible()
   }
   return pane
 }
 
-async function createNamedClusterFromMenu(page: Page, pane: ClusterPane, name: string) {
-  const [first, outside, last] = pane.tabs
-  if (!first || !outside || !last) {
-    throw new Error('Grouping requires three terminal tabs')
-  }
-  const members = [first, last]
+async function createNamedClusterFromMenu(
+  page: Page,
+  pane: ClusterPane,
+  name: string,
+  selectedMembers?: StripTerminalTab[]
+) {
+  const members = selectedMembers ?? pane.tabs.filter((_, index) => index === 0 || index === 2)
+  const first = members[0]
   const memberIds = members.map((tab) => tab.id)
+  const outside = pane.tabs.find((tab) => !memberIds.includes(tab.id))
+  if (!first || members.length !== 2 || !outside) {
+    throw new Error('Grouping requires two members and an outside terminal tab')
+  }
   await terminalTab(page, pane.groupId, outside).click()
-  // Why: the first toggle seeds the active tab; toggling it off leaves two nonadjacent members.
-  for (const tab of [first, last, outside]) {
+  // Why: the first toggle seeds the active outside tab, which must leave the selection.
+  for (const tab of [...members, outside]) {
     await terminalTab(page, pane.groupId, tab).click({ modifiers: [selectionModifier] })
   }
   await expect
@@ -280,6 +286,125 @@ test.describe('Tab clusters', () => {
     await expect(chip).toHaveAttribute('aria-expanded', 'false')
     await expect(hiddenTab).toBeHidden()
     await expect(outsideTab).toHaveAttribute('data-active', 'true')
+  })
+
+  test('cycles and numbers only visible tabs while a collapsed middle group keeps its sticky member', async ({
+    orcaPage
+  }) => {
+    const pane = await prepareTerminalPane(orcaPage, 4)
+    const [left, stickyMember, hiddenMember, right] = pane.tabs
+    if (!left || !stickyMember || !hiddenMember || !right) {
+      throw new Error('Visible shortcut coverage requires four terminal tabs')
+    }
+    const { clusterId } = await createNamedClusterFromMenu(orcaPage, pane, 'Keyboard group', [
+      stickyMember,
+      hiddenMember
+    ])
+    const chip = clusterChip(orcaPage, pane.groupId, clusterId)
+    const stickyTab = terminalTab(orcaPage, pane.groupId, stickyMember)
+    const hiddenTab = terminalTab(orcaPage, pane.groupId, hiddenMember)
+    await stickyTab.click()
+    await chip.click()
+    await terminalTab(orcaPage, pane.groupId, right).click()
+    await expect
+      .poll(() => readCluster(orcaPage, pane, clusterId))
+      .toMatchObject({ collapsed: true, shownTabId: stickyMember.id })
+    await expect(stickyTab).toBeVisible()
+    await expect(hiddenTab).toBeHidden()
+    await expect(terminalTab(orcaPage, pane.groupId, right)).toHaveAttribute('data-active', 'true')
+
+    const visibleTabs = paneStrip(orcaPage, pane.groupId).locator(`${SORTABLE_TAB}:visible`)
+    const visibleOrder = await visibleTabs.evaluateAll((tabs) =>
+      tabs.map((tab) => tab.getAttribute('data-tab-id'))
+    )
+    expect(visibleOrder).toEqual([left.entityId, stickyMember.entityId, right.entityId])
+
+    for (const tab of [left, stickyMember, right, left, stickyMember, right]) {
+      await orcaPage.keyboard.press(`${selectionModifier}+Shift+]`)
+      await expect(terminalTab(orcaPage, pane.groupId, tab)).toHaveAttribute('data-active', 'true')
+      await expect(hiddenTab).toBeHidden()
+      await expect(stickyTab).toBeVisible()
+      await expect(chip).toHaveAttribute('aria-expanded', 'false')
+    }
+
+    for (const [index, entityId] of visibleOrder.entries()) {
+      expect(
+        await visibleTabs.evaluateAll((tabs) => tabs.map((tab) => tab.getAttribute('data-tab-id')))
+      ).toEqual(visibleOrder)
+      if (!entityId) {
+        throw new Error('A visible sortable tab has no backing tab identity')
+      }
+      await orcaPage.keyboard.press(`${selectionModifier}+${index + 1}`)
+      await expect(
+        paneStrip(orcaPage, pane.groupId).locator(`${SORTABLE_TAB}[data-active="true"]:visible`)
+      ).toHaveAttribute('data-tab-id', entityId)
+      await expect(hiddenTab).toBeHidden()
+      await expect(stickyTab).toBeVisible()
+    }
+    await expect
+      .poll(() => readCluster(orcaPage, pane, clusterId))
+      .toMatchObject({ collapsed: true, shownTabId: stickyMember.id })
+  })
+
+  test('Ctrl+Tab MRU switcher activates a hidden member and preserves the sticky member after leaving', async ({
+    orcaPage
+  }) => {
+    const pane = await prepareTerminalPane(orcaPage, 4)
+    await orcaPage.evaluate(async () => {
+      await window.__store?.getState().updateSettings({ ctrlTabOrderMode: 'mru' })
+    })
+    const [, stickyMember, hiddenMember, outside] = pane.tabs
+    if (!stickyMember || !hiddenMember || !outside) {
+      throw new Error('Ctrl+Tab coverage requires four terminal tabs')
+    }
+    const { clusterId } = await createNamedClusterFromMenu(orcaPage, pane, 'MRU group', [
+      stickyMember,
+      hiddenMember
+    ])
+    const chip = clusterChip(orcaPage, pane.groupId, clusterId)
+    const stickyTab = terminalTab(orcaPage, pane.groupId, stickyMember)
+    const hiddenTab = terminalTab(orcaPage, pane.groupId, hiddenMember)
+    const outsideTab = terminalTab(orcaPage, pane.groupId, outside)
+    await hiddenTab.click()
+    await stickyTab.click()
+    await chip.click()
+    await outsideTab.click()
+    await expect
+      .poll(async () => (await readPane(orcaPage, pane))?.recentTabIds?.slice(-3))
+      .toEqual([hiddenMember.id, stickyMember.id, outside.id])
+    await expect
+      .poll(() => readCluster(orcaPage, pane, clusterId))
+      .toMatchObject({ collapsed: true, shownTabId: stickyMember.id })
+    await expect(outsideTab).toHaveAttribute('data-active', 'true')
+    await expect(stickyTab).toBeVisible()
+    await expect(hiddenTab).toBeHidden()
+
+    const switcher = orcaPage.getByRole('listbox', { name: 'Switch tabs', exact: true })
+    // Why: terminal-window Ctrl+Tab reaches the renderer; IPC forwarding belongs to browser guests.
+    await orcaPage.keyboard.down('Control')
+    try {
+      await orcaPage.keyboard.press('Tab')
+      await expect(switcher).toBeVisible()
+      await expect(switcher.getByRole('option')).toHaveCount(4)
+      await expect(outsideTab).toHaveAttribute('data-active', 'true')
+      await orcaPage.keyboard.press('Tab')
+      await expect(outsideTab).toHaveAttribute('data-active', 'true')
+    } finally {
+      await orcaPage.keyboard.up('Control')
+    }
+
+    await expect(switcher).toBeHidden()
+    await expect(hiddenTab).toHaveAttribute('data-active', 'true')
+    await expect(hiddenTab).toBeVisible()
+    await expect(stickyTab).toBeVisible()
+    await expect(chip).toHaveAttribute('aria-expanded', 'false')
+    await outsideTab.click()
+    await expect(outsideTab).toHaveAttribute('data-active', 'true')
+    await expect(stickyTab).toBeVisible()
+    await expect(hiddenTab).toBeHidden()
+    await expect
+      .poll(() => readCluster(orcaPage, pane, clusterId))
+      .toMatchObject({ collapsed: true, shownTabId: stickyMember.id })
   })
 
   test('ungroups without closing tabs, then closes every member of a regrouped cluster', async ({

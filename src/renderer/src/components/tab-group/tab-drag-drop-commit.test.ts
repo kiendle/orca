@@ -262,6 +262,41 @@ describe('tab cluster drag commits', () => {
     ])
   })
 
+  it.each(['chip', 'member'] as const)(
+    'moves an equal-id cluster across panes via its %s without merging the records',
+    (hoveredKind) => {
+      const sourceCluster = { ...SOURCE_CLUSTER, id: 'same', shownTabId: 's-a' }
+      const targetCluster = { ...TARGET_CLUSTER, id: 'same' }
+      store.setState({
+        groupsByWorktree: {
+          [WT]: [
+            { ...group('source'), tabClusters: [sourceCluster] },
+            { ...group('target'), tabClusters: [targetCluster] }
+          ]
+        }
+      })
+      const overData = hoveredKind === 'chip' ? chip('target', targetCluster) : tab('t-b', 'target')
+      commit(event(chip('source', sourceCluster), overData, 90))
+      expect(group('source').tabOrder).toEqual(['s-tail'])
+      expect(group('source').tabClusters).toBeUndefined()
+      expect(group('target').tabOrder).toEqual(['left', 't-a', 't-b', 't-c', 's-a', 's-b', 'right'])
+      expect(group('target').tabClusters?.find((cluster) => cluster.id === 'same')).toEqual(
+        targetCluster
+      )
+      const movedCluster = group('target').tabClusters?.find((cluster) =>
+        cluster.tabIds.includes('s-a')
+      )
+      expect(movedCluster).toMatchObject({
+        name: 'Source',
+        color: 'blue',
+        collapsed: true,
+        shownTabId: 's-a',
+        tabIds: ['s-a', 's-b']
+      })
+      expect(movedCluster?.id).not.toBe('same')
+    }
+  )
+
   it('moves a chip to a pane body with its metadata intact', () => {
     commit(event(chip(), { kind: 'pane-body', worktreeId: WT, groupId: 'target' }))
     expect(group('target').tabOrder).toEqual(['left', 't-a', 't-b', 't-c', 'right', 's-a', 's-b'])

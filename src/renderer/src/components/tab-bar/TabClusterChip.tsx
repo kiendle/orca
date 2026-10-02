@@ -32,6 +32,7 @@ export function TabClusterChip({
 }): React.JSX.Element {
   const renameCluster = useAppStore((state) => state.renameTabCluster)
   const setCollapsed = useAppStore((state) => state.setTabClusterCollapsed)
+  const restoreCollapseState = useAppStore((state) => state.restoreTabClusterCollapseState)
   const rename = useTabStripRename({
     value: cluster.name,
     autoStart: autoRename && cluster.name === '',
@@ -39,7 +40,7 @@ export function TabClusterChip({
   })
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
-  const sortableId = getTabClusterSortableId(cluster.id)
+  const sortableId = getTabClusterSortableId(groupId, cluster.id)
   const dragData: TabClusterDragItemData = {
     kind: 'tab-cluster',
     worktreeId,
@@ -52,16 +53,24 @@ export function TabClusterChip({
   const { attributes, listeners, setNodeRef } = useSortable({ id: sortableId, data: dragData })
   const toggleCollapsed = (): void => setCollapsed(groupId, cluster.id, !cluster.collapsed)
   const clickCountRef = useRef(0)
+  const collapseBeforeClickRef = useRef<Pick<TabCluster, 'collapsed' | 'shownTabId'> | null>(null)
   const { onPointerDown } = useTabStripPointerActivation({
     onActivate: () => {
       const clickCount = clickCountRef.current
       clickCountRef.current = 0
       // Why: Collapse updates can lose the browser's dblclick before React receives it.
       if (clickCount >= 2) {
-        // Why: undo the first press's toggle so double-click only renames.
-        toggleCollapsed()
+        // Why: toggling back would recapture the active member instead of the original sticky one.
+        if (collapseBeforeClickRef.current) {
+          restoreCollapseState(groupId, cluster.id, collapseBeforeClickRef.current)
+          collapseBeforeClickRef.current = null
+        }
         rename.handleRenameOpen()
       } else {
+        collapseBeforeClickRef.current = {
+          collapsed: cluster.collapsed,
+          shownTabId: cluster.shownTabId
+        }
         toggleCollapsed()
       }
     },
@@ -134,6 +143,9 @@ export function TabClusterChip({
           onChange={(event) => rename.setRenameValue(event.target.value)}
           onBlur={rename.commitRename}
           onKeyDown={rename.onRenameKeyDown}
+          onKeyUp={rename.onRenameKeyUp}
+          onCompositionStart={rename.onRenameCompositionStart}
+          onCompositionEnd={rename.onRenameCompositionEnd}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => event.stopPropagation()}
           onDoubleClick={(event) => event.stopPropagation()}

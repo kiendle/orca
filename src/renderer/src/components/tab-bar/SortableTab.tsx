@@ -142,6 +142,9 @@ export default function SortableTab({
     handleRenameOpen,
     commitRename,
     onRenameKeyDown,
+    onRenameKeyUp,
+    onRenameCompositionStart,
+    onRenameCompositionEnd,
     setRenameInputElement
   } = useSortableTabRename({
     tabId: tab.id,
@@ -268,6 +271,9 @@ export default function SortableTab({
           onChange={(event) => setRenameValue(event.target.value)}
           onBlur={commitRename}
           onKeyDown={onRenameKeyDown}
+          onKeyUp={onRenameKeyUp}
+          onCompositionStart={onRenameCompositionStart}
+          onCompositionEnd={onRenameCompositionEnd}
           // Why: stop bubbling so clicking inside the input doesn't activate the tab or start a dnd-kit drag.
           onPointerDown={(event) => event.stopPropagation()}
           onMouseDown={(event) => {

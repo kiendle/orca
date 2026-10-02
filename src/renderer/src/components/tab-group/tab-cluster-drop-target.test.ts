@@ -145,6 +145,38 @@ describe('tab cluster drop targets', () => {
     }
   )
 
+  it.each(['left', 'right'] as const)(
+    'places a cross-pane equal-id chip at the target cluster’s %s boundary',
+    (side) => {
+      const targetGroup = {
+        ...GROUP,
+        id: 'destination',
+        tabClusters: [{ ...CLUSTER, id: 'same' }]
+      }
+      for (const overData of [chip('same', targetGroup.id), tab('b', targetGroup.id)]) {
+        expect(
+          resolveTabClusterDropTarget({
+            activeDrag: chip('same', 'source'),
+            overData,
+            targetGroup,
+            side
+          })
+        ).toEqual({ index: side === 'left' ? 1 : 4, clusterId: 'same' })
+      }
+    }
+  )
+
+  it('rejects chip drops onto their own chip', () => {
+    expect(
+      resolveTabClusterDropTarget({
+        activeDrag: chip(),
+        overData: chip(),
+        targetGroup: GROUP,
+        side: 'left'
+      })
+    ).toBeNull()
+  })
+
   it('rejects chip drops onto their own members', () => {
     expect(
       resolveTabClusterDropTarget({
