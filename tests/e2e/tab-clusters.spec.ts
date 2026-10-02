@@ -289,7 +289,8 @@ test.describe('Tab clusters', () => {
   })
 
   test('cycles and numbers only visible tabs while a collapsed middle group keeps its sticky member', async ({
-    orcaPage
+    orcaPage,
+    electronApp
   }) => {
     const pane = await prepareTerminalPane(orcaPage, 4)
     const [left, stickyMember, hiddenMember, right] = pane.tabs
@@ -334,7 +335,13 @@ test.describe('Tab clusters', () => {
       if (!entityId) {
         throw new Error('A visible sortable tab has no backing tab identity')
       }
-      await orcaPage.keyboard.press(`${selectionModifier}+${index + 1}`)
+      // Why: synthetic CDP keys never reach main's before-input-event router (unit-tested
+      // separately), so send the IPC that router emits for Select Tab N.
+      await electronApp.evaluate(({ BrowserWindow }, tabIndex) => {
+        for (const window of BrowserWindow.getAllWindows()) {
+          window.webContents.send('ui:jumpToTabIndex', tabIndex)
+        }
+      }, index)
       await expect(
         paneStrip(orcaPage, pane.groupId).locator(`${SORTABLE_TAB}[data-active="true"]:visible`)
       ).toHaveAttribute('data-tab-id', entityId)
