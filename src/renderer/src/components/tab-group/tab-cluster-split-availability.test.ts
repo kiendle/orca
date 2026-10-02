@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { canSplitTabClusterLocally } from './tab-cluster-split-availability'
+import { getTabClusterSplitBlocker } from './tab-cluster-split-availability'
 
 const WT = 'repo1::/tmp/cluster-split'
 
 describe('local cluster split availability', () => {
   it('allows local workspaces even while a remote environment is focused', () => {
     expect(
-      canSplitTabClusterLocally(
+      getTabClusterSplitBlocker(
         {
           activeWorktreeId: WT,
           activeWorkspaceExecutionHostId: 'local',
@@ -16,12 +16,12 @@ describe('local cluster split availability', () => {
         },
         WT
       )
-    ).toBe(true)
+    ).toBeNull()
   })
 
   it('rejects workspaces whose tab moves are mirrored to an active host', () => {
     expect(
-      canSplitTabClusterLocally(
+      getTabClusterSplitBlocker(
         {
           activeWorktreeId: WT,
           activeWorkspaceExecutionHostId: 'runtime:remote',
@@ -29,12 +29,12 @@ describe('local cluster split availability', () => {
         },
         WT
       )
-    ).toBe(false)
+    ).toBe('remote-server')
   })
 
   it('rejects a projected runtime owner even when its repo is local', () => {
     expect(
-      canSplitTabClusterLocally(
+      getTabClusterSplitBlocker(
         {
           repos: [{ id: 'repo1', executionHostId: 'local' }],
           worktreesByRepo: {
@@ -45,12 +45,12 @@ describe('local cluster split availability', () => {
         },
         WT
       )
-    ).toBe(false)
+    ).toBe('remote-server')
   })
 
   it('rejects new splits in the single-pane floating strip', () => {
     expect(
-      canSplitTabClusterLocally(
+      getTabClusterSplitBlocker(
         {
           activeWorktreeId: WT,
           activeWorkspaceExecutionHostId: 'runtime:remote',
@@ -58,6 +58,6 @@ describe('local cluster split availability', () => {
         },
         FLOATING_TERMINAL_WORKTREE_ID
       )
-    ).toBe(false)
+    ).toBe('floating-panel')
   })
 })

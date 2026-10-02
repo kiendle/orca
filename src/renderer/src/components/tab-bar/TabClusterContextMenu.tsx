@@ -21,11 +21,12 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { TAB_CLUSTER_COLORS, type TabCluster } from '../../../../shared/tab-types'
-import { canSplitTabClusterLocally } from '../tab-group/tab-cluster-split-availability'
+import { getTabClusterSplitBlocker } from '../tab-group/tab-cluster-split-availability'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { TAB_CLUSTER_COLOR_CLASSES, TAB_CLUSTER_COLOR_LABELS } from './tab-cluster-colors'
 import { useTabClusterMenuCloseAction } from './use-tab-cluster-menu-close-action'
@@ -49,7 +50,7 @@ export function TabClusterContextMenu({
   onRename: () => void
   onClose: () => void
 }): React.JSX.Element {
-  const canSplit = useAppStore((state) => canSplitTabClusterLocally(state, worktreeId))
+  const splitBlocker = useAppStore((state) => getTabClusterSplitBlocker(state, worktreeId))
   const setColor = useAppStore((state) => state.setTabClusterColor)
   const setCollapsed = useAppStore((state) => state.setTabClusterCollapsed)
   const ungroup = useAppStore((state) => state.ungroupTabCluster)
@@ -117,40 +118,69 @@ export function TabClusterContextMenu({
             ? translate('components.tabCluster.expand', 'Expand Group')
             : translate('components.tabCluster.collapse', 'Collapse Group')}
         </DropdownMenuItem>
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger disabled={!canSplit}>
-            <Columns2 className="size-3.5" />
-            {translate('components.tabCluster.moveToSplit', 'Move Group to New Split')}
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="max-w-[calc(100vw-1rem)] whitespace-nowrap">
-            <DropdownMenuItem
-              onSelect={() =>
-                moveCluster(groupId, cluster.id, { groupId, splitDirection: 'right' })
-              }
-            >
-              <ArrowRight className="size-3.5" />
-              {translate('components.tabCluster.splitRight', 'Right')}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() => moveCluster(groupId, cluster.id, { groupId, splitDirection: 'left' })}
-            >
-              <ArrowLeft className="size-3.5" />
-              {translate('components.tabCluster.splitLeft', 'Left')}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() => moveCluster(groupId, cluster.id, { groupId, splitDirection: 'down' })}
-            >
-              <ArrowDown className="size-3.5" />
-              {translate('components.tabCluster.splitDown', 'Down')}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() => moveCluster(groupId, cluster.id, { groupId, splitDirection: 'up' })}
-            >
-              <ArrowUp className="size-3.5" />
-              {translate('components.tabCluster.splitUp', 'Up')}
-            </DropdownMenuItem>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
+        {splitBlocker ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {/* Why: disabled items ignore pointer events, so the wrapper owns the hover. */}
+              <div className="cursor-not-allowed" data-tab-cluster-split-unavailable={splitBlocker}>
+                <DropdownMenuItem disabled>
+                  <Columns2 className="size-3.5" />
+                  {translate('components.tabCluster.moveToSplit', 'Move Group to New Split')}
+                </DropdownMenuItem>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8} className="z-[80] max-w-64">
+              {splitBlocker === 'remote-server'
+                ? translate(
+                    'components.tabCluster.moveToSplitUnavailableRemote',
+                    'Not available for workspaces on a remote Orca server. Drag the group into an existing split instead.'
+                  )
+                : translate(
+                    'components.tabCluster.moveToSplitUnavailableFloating',
+                    'Not available in the floating terminal panel.'
+                  )}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Columns2 className="size-3.5" />
+              {translate('components.tabCluster.moveToSplit', 'Move Group to New Split')}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="max-w-[calc(100vw-1rem)] whitespace-nowrap">
+              <DropdownMenuItem
+                onSelect={() =>
+                  moveCluster(groupId, cluster.id, { groupId, splitDirection: 'right' })
+                }
+              >
+                <ArrowRight className="size-3.5" />
+                {translate('components.tabCluster.splitRight', 'Right')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() =>
+                  moveCluster(groupId, cluster.id, { groupId, splitDirection: 'left' })
+                }
+              >
+                <ArrowLeft className="size-3.5" />
+                {translate('components.tabCluster.splitLeft', 'Left')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() =>
+                  moveCluster(groupId, cluster.id, { groupId, splitDirection: 'down' })
+                }
+              >
+                <ArrowDown className="size-3.5" />
+                {translate('components.tabCluster.splitDown', 'Down')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => moveCluster(groupId, cluster.id, { groupId, splitDirection: 'up' })}
+              >
+                <ArrowUp className="size-3.5" />
+                {translate('components.tabCluster.splitUp', 'Up')}
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => ungroup(groupId, cluster.id)}>
           <Ungroup className="size-3.5" />
