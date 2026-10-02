@@ -58,6 +58,8 @@ export function TabClusterChip({
       clickCountRef.current = 0
       // Why: Collapse updates can lose the browser's dblclick before React receives it.
       if (clickCount >= 2) {
+        // Why: undo the first press's toggle so double-click only renames.
+        toggleCollapsed()
         rename.handleRenameOpen()
       } else {
         toggleCollapsed()
