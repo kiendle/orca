@@ -187,9 +187,8 @@ test.describe('Tab clusters', () => {
     await expect(terminalTab(orcaPage, pane.groupId, outside)).toBeVisible()
 
     await terminalTab(orcaPage, pane.groupId, outside).click()
-    for (const tab of members) {
-      await expect(terminalTab(orcaPage, pane.groupId, tab)).toBeHidden()
-    }
+    await expect(terminalTab(orcaPage, pane.groupId, activeMember)).toBeVisible()
+    await expect(terminalTab(orcaPage, pane.groupId, hiddenMember)).toBeHidden()
     await expect(chip).toHaveAttribute('aria-expanded', 'false')
     await chip.click()
     await expect
@@ -211,6 +210,76 @@ test.describe('Tab clusters', () => {
       .poll(() => readCluster(orcaPage, pane, clusterId))
       .toMatchObject({ name: 'Build terminals' })
     await expect(chip).toHaveText('Build terminals')
+  })
+
+  test('keeps a collapsed member visible when switching away and closes only that tab', async ({
+    orcaPage
+  }) => {
+    const pane = await prepareTerminalPane(orcaPage)
+    const { clusterId, members, outside } = await createNamedClusterFromMenu(
+      orcaPage,
+      pane,
+      'Sticky terminals'
+    )
+    const [stickyMember, hiddenMember] = members
+    if (!stickyMember || !hiddenMember) {
+      throw new Error('The group must contain two tabs')
+    }
+    const chip = clusterChip(orcaPage, pane.groupId, clusterId)
+    const stickyTab = terminalTab(orcaPage, pane.groupId, stickyMember)
+    const hiddenTab = terminalTab(orcaPage, pane.groupId, hiddenMember)
+    const outsideTab = terminalTab(orcaPage, pane.groupId, outside)
+
+    await stickyTab.click()
+    await chip.click()
+    await expect
+      .poll(() => readCluster(orcaPage, pane, clusterId))
+      .toMatchObject({ collapsed: true })
+    await expect(chip).toHaveAttribute('aria-expanded', 'false')
+    await expect(stickyTab).toBeVisible()
+    await expect(stickyTab).toHaveAttribute('data-active', 'true')
+    await expect(hiddenTab).toBeHidden()
+
+    await outsideTab.click()
+    await expect(outsideTab).toHaveAttribute('data-active', 'true')
+    await expect(stickyTab).toBeVisible()
+    await expect(hiddenTab).toBeHidden()
+    await stickyTab.click()
+    await expect(stickyTab).toHaveAttribute('data-active', 'true')
+    await expect(hiddenTab).toBeHidden()
+    await outsideTab.click()
+    await expect(outsideTab).toHaveAttribute('data-active', 'true')
+    await expect(stickyTab).toBeVisible()
+    await expect(hiddenTab).toBeHidden()
+
+    await stickyTab.hover()
+    await stickyTab.getByRole('button', { name: /^Close tab /i }).click()
+    const confirmation = orcaPage.getByRole('dialog', {
+      name: 'Stop running command?',
+      exact: true
+    })
+    // Why: a shell still starting can require confirmation even without a launched command.
+    await expect
+      .poll(async () => (await confirmation.isVisible()) || (await stickyTab.count()) === 0)
+      .toBe(true)
+    if (await confirmation.isVisible()) {
+      await confirmation.getByRole('button', { name: 'Stop and Close', exact: true }).click()
+    }
+    await expect(stickyTab).toHaveCount(0)
+    await expect(hiddenTab).toBeHidden()
+    await expect(outsideTab).toHaveAttribute('data-active', 'true')
+    await expect(chip).toBeVisible()
+    await expect(chip).toHaveAttribute('aria-expanded', 'false')
+    await expect(chip).toContainText('1')
+
+    await chip.click()
+    await expect(chip).toHaveAttribute('aria-expanded', 'true')
+    await expect(hiddenTab).toBeVisible()
+    await outsideTab.click()
+    await chip.click()
+    await expect(chip).toHaveAttribute('aria-expanded', 'false')
+    await expect(hiddenTab).toBeHidden()
+    await expect(outsideTab).toHaveAttribute('data-active', 'true')
   })
 
   test('ungroups without closing tabs, then closes every member of a regrouped cluster', async ({

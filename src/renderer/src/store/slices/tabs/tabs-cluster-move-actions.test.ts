@@ -89,7 +89,7 @@ describe('moving and merging tab clusters', () => {
     seedPanes(
       ['a', 'b', 'stay'],
       ['x', 'y'],
-      [cluster('c', ['a', 'b'], { collapsed: true, name: 'Work' })]
+      [cluster('c', ['a', 'b'], { collapsed: true, name: 'Work', shownTabId: 'a' })]
     )
     const snapshots: string[][] = []
     const unsubscribe = store.subscribe((state) => {
@@ -111,7 +111,7 @@ describe('moving and merging tab clusters', () => {
     expect(source.activeTabId).toBe('stay')
     expect(destination.tabOrder).toEqual(['x', 'a', 'b', 'y'])
     expect(destination.tabClusters).toEqual([
-      cluster('c', ['a', 'b'], { collapsed: true, name: 'Work' })
+      cluster('c', ['a', 'b'], { collapsed: true, name: 'Work', shownTabId: 'a' })
     ])
     expect(destination.activeTabId).toBe('b')
     expect(state.activeGroupIdByWorktree[WT]).toBe('destination')
@@ -129,18 +129,28 @@ describe('moving and merging tab clusters', () => {
   })
 
   it('moves a cluster within its pane using a post-removal index', () => {
-    seedPanes(['a', 'b', 'outside', 'last'], ['x'], [cluster('c', ['a', 'b'], { collapsed: true })])
+    seedPanes(
+      ['a', 'b', 'outside', 'last'],
+      ['x'],
+      [cluster('c', ['a', 'b'], { collapsed: true, shownTabId: 'a' })]
+    )
     expect(store.getState().moveTabCluster('source', 'c', { groupId: 'source', index: 2 })).toBe(
       true
     )
     const source = store.getState().groupsByWorktree[WT][0]
     expect(source.tabOrder).toEqual(['outside', 'last', 'a', 'b'])
-    expect(source.tabClusters).toEqual([cluster('c', ['a', 'b'], { collapsed: true })])
+    expect(source.tabClusters).toEqual([
+      cluster('c', ['a', 'b'], { collapsed: true, shownTabId: 'a' })
+    ])
     expect(source.activeTabId).toBe('b')
   })
 
   it('moves a whole cluster to a new edge split and preserves its collapsed presentation', () => {
-    seedPanes(['a', 'b', 'stay'], ['x'], [cluster('c', ['a', 'b'], { collapsed: true })])
+    seedPanes(
+      ['a', 'b', 'stay'],
+      ['x'],
+      [cluster('c', ['a', 'b'], { collapsed: true, shownTabId: 'a' })]
+    )
     expect(
       store.getState().moveTabCluster('source', 'c', { groupId: 'source', splitDirection: 'down' })
     ).toBe(true)
@@ -149,7 +159,9 @@ describe('moving and merging tab clusters', () => {
       (pane) => pane.id !== 'source' && pane.id !== 'destination'
     )!
     expect(splitPane.tabOrder).toEqual(['a', 'b'])
-    expect(splitPane.tabClusters).toEqual([cluster('c', ['a', 'b'], { collapsed: true })])
+    expect(splitPane.tabClusters).toEqual([
+      cluster('c', ['a', 'b'], { collapsed: true, shownTabId: 'a' })
+    ])
     expect(splitPane.activeTabId).toBe('b')
     expect(state.groupsByWorktree[WT][0].tabOrder).toEqual(['stay'])
     expect(state.activeGroupIdByWorktree[WT]).toBe(splitPane.id)
@@ -231,7 +243,12 @@ describe('moving and merging tab clusters', () => {
       ['a', 'b', 'c'],
       ['x', 'y'],
       [
-        cluster('same', ['a', 'b'], { name: 'Source', color: 'pink', collapsed: true }),
+        cluster('same', ['a', 'b'], {
+          name: 'Source',
+          color: 'pink',
+          collapsed: true,
+          shownTabId: 'a'
+        }),
         cluster('second', ['c'])
       ],
       [cluster('same', ['x', 'y'], { name: 'Destination' })]
@@ -258,6 +275,7 @@ describe('moving and merging tab clusters', () => {
       ['', 'blue', false, ['c']]
     ])
     expect(new Set(destination.tabClusters?.map((item) => item.id)).size).toBe(3)
+    expect(destination.tabClusters?.find((item) => item.name === 'Source')?.shownTabId).toBe('a')
     expect(destination.activeTabId).toBe('x')
     expect(state.activeFileId).toBe('x')
     expect(state.unifiedTabsByWorktree[WT].every((tab) => tab.groupId === 'destination')).toBe(true)

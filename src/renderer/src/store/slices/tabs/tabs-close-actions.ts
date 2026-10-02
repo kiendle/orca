@@ -18,6 +18,7 @@ import {
 import { structuredAgentSessionTabId } from '../../../../../shared/structured-agent-session-projection'
 import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-focus-intent'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/local-structured-session-owner'
+import { getHiddenClusterTabIds } from './tab-cluster-model'
 
 export function createTabsCloseActions(
   set: TabsSliceSet,
@@ -69,13 +70,24 @@ export function createTabsCloseActions(
         })
         get().clearNativeChatLaunchDraft(structuredAgentSessionTabId(tab.entityId))
       }
-      // Why: on closing the active tab, walk the MRU stack to the previously-active tab; pickNextActiveTab falls back to the neighbor.
-      const nextActiveTabId =
-        group.activeTabId === tabId
-          ? wasLastTab
-            ? null
-            : pickNextActiveTab(dedupedGroupOrder, group.recentTabIds, tabId)
-          : group.activeTabId
+      let nextActiveTabId = group.activeTabId
+      if (group.activeTabId === tabId) {
+        // Why: closing a visible tab must not reveal a collapsed member while another visible tab remains.
+        const hiddenTabIds =
+          !wasLastTab && group.tabClusters?.some((cluster) => cluster.collapsed)
+            ? getHiddenClusterTabIds(group)
+            : undefined
+        const visibleOrder = hiddenTabIds?.size
+          ? dedupedGroupOrder.filter((id) => !hiddenTabIds.has(id))
+          : dedupedGroupOrder
+        nextActiveTabId = wasLastTab
+          ? null
+          : pickNextActiveTab(
+              visibleOrder.length > 1 ? visibleOrder : dedupedGroupOrder,
+              group.recentTabIds,
+              tabId
+            )
+      }
       const nextRecentTabIds = sanitizeRecentTabIds(
         (group.recentTabIds ?? []).filter((id) => id !== tabId),
         remainingOrder

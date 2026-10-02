@@ -102,6 +102,8 @@ export type TabCluster = {
   collapsed: boolean
   /** Member unified tab ids: unpinned, present in the pane, contiguous and in pane tabOrder order. */
   tabIds: string[]
+  /** While collapsed: the member that was active when the group collapsed, kept visible after you leave it. */
+  shownTabId?: string
 }
 
 export type TabGroup = {

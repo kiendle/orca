@@ -184,7 +184,12 @@ describe('tab cluster actions', () => {
     store.getState().setTabClusterCollapsed(PANE, 'c', true)
     let pane = store.getState().groupsByWorktree[WT][0]
     expect(pane.tabClusters?.[0]).toEqual(
-      cluster('c', ['a', 'b'], { name: 'x'.repeat(80), color: 'pink', collapsed: true })
+      cluster('c', ['a', 'b'], {
+        name: 'x'.repeat(80),
+        color: 'pink',
+        collapsed: true,
+        shownTabId: 'a'
+      })
     )
     expect(pane.activeTabId).toBe('a')
     store.getState().activateTab('b')

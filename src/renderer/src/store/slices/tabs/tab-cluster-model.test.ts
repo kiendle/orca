@@ -82,17 +82,68 @@ describe('normalizeTabClusters', () => {
   })
 
   it('returns the original array and records for normal form, including a second repair', () => {
-    const clusters = [cluster('c', ['a', 'b'])]
+    const clusters = [cluster('c', ['a', 'b'], { collapsed: true, shownTabId: 'a' })]
     expect(normalizeTabClusters({ tabOrder: ['a', 'b'], clusters, pinnedTabIds: unpinned })).toBe(
       clusters
     )
     const repaired = normalizeTabClusters({
       tabOrder: ['a', 'b'],
-      clusters: [cluster('c', ['b', 'a'])],
+      clusters: [cluster('c', ['b', 'a'], { collapsed: true, shownTabId: 'a' })],
       pinnedTabIds: unpinned
     })
     expect(
       normalizeTabClusters({ tabOrder: ['a', 'b'], clusters: repaired, pinnedTabIds: unpinned })
+    ).toBe(repaired)
+  })
+
+  it.each([
+    {
+      reason: 'expanded',
+      tabOrder: ['a', 'b'],
+      members: ['a', 'b'],
+      collapsed: false,
+      pinnedTabIds: [],
+      expectedMembers: ['a', 'b']
+    },
+    {
+      reason: 'removed',
+      tabOrder: ['b'],
+      members: ['a', 'b'],
+      collapsed: true,
+      pinnedTabIds: [],
+      expectedMembers: ['b']
+    },
+    {
+      reason: 'pinned',
+      tabOrder: ['a', 'b'],
+      members: ['a', 'b'],
+      collapsed: true,
+      pinnedTabIds: ['a'],
+      expectedMembers: ['b']
+    },
+    {
+      reason: 'outside the surviving run',
+      tabOrder: ['a', 'x', 'y', 'b', 'c'],
+      members: ['a', 'b', 'c'],
+      collapsed: true,
+      pinnedTabIds: [],
+      expectedMembers: ['b', 'c']
+    }
+  ])('drops the shown member when $reason and stays idempotent', (scenario) => {
+    const pinnedTabIds = new Set(scenario.pinnedTabIds)
+    const repaired = normalizeTabClusters({
+      tabOrder: scenario.tabOrder,
+      clusters: [
+        cluster('c', scenario.members, { collapsed: scenario.collapsed, shownTabId: 'a' })
+      ],
+      pinnedTabIds
+    })
+    expect(repaired).toEqual([
+      cluster('c', scenario.expectedMembers, { collapsed: scenario.collapsed })
+    ])
+    expect(Object.hasOwn(repaired?.[0] ?? {}, 'shownTabId')).toBe(false)
+    expect(
+      normalizeTabClusters({ tabOrder: scenario.tabOrder, clusters: repaired, pinnedTabIds })
     ).toBe(repaired)
   })
 
@@ -113,6 +164,7 @@ describe('normalizeTabClusters', () => {
     const malformed = cluster('c', ['a'], { name: '  Work  ' })
     Reflect.set(malformed, 'color', 'sepia')
     Reflect.set(malformed, 'collapsed', 1)
+    Reflect.set(malformed, 'shownTabId', 42)
     expect(
       normalizeTabClusters({ tabOrder: ['a'], clusters: [malformed], pinnedTabIds: unpinned })
     ).toEqual([cluster('c', ['a'], { name: 'Work', color: 'grey', collapsed: true })])
@@ -134,10 +186,28 @@ describe('cluster membership projections', () => {
     expect(getTabClusterForTab(clusters, 'missing')).toBeNull()
   })
 
+  it('keeps the collapse-time member visible alongside whichever member is currently active', () => {
+    const clusters = [cluster('c', ['a', 'b', 'c'], { collapsed: true, shownTabId: 'a' })]
+    expect([...getHiddenClusterTabIds({ tabClusters: clusters, activeTabId: 'outside' })]).toEqual([
+      'b',
+      'c'
+    ])
+    expect([...getHiddenClusterTabIds({ tabClusters: clusters, activeTabId: 'b' })]).toEqual(['c'])
+    expect([...getHiddenClusterTabIds({ tabClusters: clusters, activeTabId: 'outside' })]).toEqual([
+      'b',
+      'c'
+    ])
+    expect(clusters[0].shownTabId).toBe('a')
+  })
+
   it('rekeys cluster members and leaves unchanged records referentially stable', () => {
-    const clusters = [cluster('c', ['old', 'b']), cluster('untouched', ['c'])]
+    const clusters = [
+      cluster('c', ['old', 'b'], { collapsed: true, shownTabId: 'old' }),
+      cluster('untouched', ['c'])
+    ]
     const rekeyed = rekeyTabClusterMembers(clusters, new Map([['old', 'new']]))
     expect(rekeyed?.[0].tabIds).toEqual(['new', 'b'])
+    expect(rekeyed?.[0].shownTabId).toBe('new')
     expect(rekeyed?.[1]).toBe(clusters[1])
     expect(rekeyTabClusterMembers(clusters, new Map([['unrelated', 'new']]))).toBe(clusters)
     expect(rekeyTabClusterMembers(undefined, new Map())).toBeUndefined()
@@ -151,10 +221,19 @@ describe('cluster membership projections', () => {
 
   it('carries every incoming record and changes only colliding cluster ids', () => {
     const destination = cluster('same', ['a'])
-    const incoming = cluster('same', ['b'], { name: 'Source', collapsed: true })
+    const incoming = cluster('same', ['b'], {
+      name: 'Source',
+      collapsed: true,
+      shownTabId: 'b'
+    })
     const result = mergeTabClusterRecords([destination], [incoming, cluster('unique', ['c'])])
     expect(result?.[0]).toBe(destination)
-    expect(result?.[1]).toMatchObject({ name: 'Source', collapsed: true, tabIds: ['b'] })
+    expect(result?.[1]).toMatchObject({
+      name: 'Source',
+      collapsed: true,
+      tabIds: ['b'],
+      shownTabId: 'b'
+    })
     expect(result?.[1].id).not.toBe('same')
     expect(result?.[2].id).toBe('unique')
   })

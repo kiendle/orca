@@ -4,6 +4,7 @@ import type { TabCluster, TabGroup } from '../../../../../shared/tab-types'
 import type { AppState } from '../../types'
 import { createTestStore, makeTabGroup, makeUnifiedTab, seedStore } from '../store-test-helpers'
 import { createTabsSliceMockApi } from '../tabs-slice-test-harness'
+import { getHiddenClusterTabIds } from './tab-cluster-model'
 
 createTabsSliceMockApi()
 
@@ -106,6 +107,19 @@ describe.each(['drop', 'move'] as const)('%s tab cluster transfers', (operation)
     expect(pane('target').tabClusters).toEqual([TARGET_CLUSTER])
     expect(pane('target').tabOrder[index]).toBe('s2')
     expect(pane('source').tabClusters?.[0].tabIds).toEqual(['s1'])
+  })
+
+  it('drops the sticky state when its member moves alone into a different cluster', () => {
+    store.getState().setTabClusterCollapsed('source', SOURCE_CLUSTER.id, false)
+    store.getState().setTabClusterCollapsed('source', SOURCE_CLUSTER.id, true)
+    expect(pane('source').tabClusters?.[0].shownTabId).toBe('s2')
+    expect(transfer(2, TARGET_CLUSTER.id)).toBe(true)
+    expect(pane('source').tabClusters).toEqual([{ ...SOURCE_CLUSTER, tabIds: ['s1'] }])
+    expect(pane('target').tabClusters).toEqual([
+      { ...TARGET_CLUSTER, tabIds: ['a', 's2', 'b', 'c'] }
+    ])
+    store.getState().activateTab('tail')
+    expect([...getHiddenClusterTabIds(pane('source'))]).toEqual(['s1'])
   })
 
   it('removes the final source member without carrying its cluster record', () => {

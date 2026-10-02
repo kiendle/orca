@@ -76,17 +76,27 @@ export function normalizeTabClusters(args: {
     const name = cluster.name.trim()
     const color = isTabClusterColor(cluster.color) ? cluster.color : 'grey'
     const collapsed = Boolean(cluster.collapsed)
+    const shownTabId =
+      collapsed && cluster.shownTabId !== undefined && tabIds.includes(cluster.shownTabId)
+        ? cluster.shownTabId
+        : undefined
     if (
       name === cluster.name &&
       color === cluster.color &&
       collapsed === cluster.collapsed &&
+      shownTabId === cluster.shownTabId &&
+      (shownTabId !== undefined || !Object.hasOwn(cluster, 'shownTabId')) &&
       tabIds.length === cluster.tabIds.length &&
       tabIds.every((id, memberIndex) => id === cluster.tabIds[memberIndex])
     ) {
       normalized.push(cluster)
     } else {
       changed = true
-      normalized.push({ ...cluster, name, color, collapsed, tabIds })
+      const nextCluster = { ...cluster, name, color, collapsed, tabIds }
+      if (shownTabId === undefined) {
+        delete nextCluster.shownTabId
+      }
+      normalized.push(nextCluster)
     }
   })
   if (!normalized.length) {
@@ -115,7 +125,7 @@ export function getHiddenClusterTabIds(
       continue
     }
     for (const id of cluster.tabIds) {
-      if (id !== group.activeTabId) {
+      if (id !== group.activeTabId && id !== cluster.shownTabId) {
         hidden.add(id)
       }
     }
@@ -133,11 +143,22 @@ export function rekeyTabClusterMembers(
   let changed = false
   const next = clusters.map((cluster) => {
     const tabIds = cluster.tabIds.map((id) => rekey.get(id) ?? id)
-    if (tabIds.every((id, index) => id === cluster.tabIds[index])) {
+    const shownTabId =
+      cluster.shownTabId === undefined
+        ? undefined
+        : (rekey.get(cluster.shownTabId) ?? cluster.shownTabId)
+    if (
+      shownTabId === cluster.shownTabId &&
+      tabIds.every((id, index) => id === cluster.tabIds[index])
+    ) {
       return cluster
     }
     changed = true
-    return { ...cluster, tabIds }
+    const nextCluster = { ...cluster, tabIds }
+    if (shownTabId !== undefined) {
+      nextCluster.shownTabId = shownTabId
+    }
+    return nextCluster
   })
   if (changed) {
     return next

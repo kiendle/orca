@@ -6,5 +6,6 @@ export const tabClusterSchema = z.object({
   name: z.string(),
   color: z.enum(TAB_CLUSTER_COLORS).catch('grey'),
   collapsed: z.boolean(),
-  tabIds: z.array(z.string())
+  tabIds: z.array(z.string()),
+  shownTabId: z.string().optional().catch(undefined)
 })

@@ -5,6 +5,7 @@ import { parseWorkspaceSession } from '../../../../../shared/workspace-session-s
 import { buildPersistedUnifiedTabSessionData } from '@/lib/workspace-session-unified-tabs'
 import { buildHydratedTabState } from '../tabs-hydration'
 import { makeTabGroup, makeUnifiedTab } from '../store-test-helpers'
+import { getHiddenClusterTabIds } from './tab-cluster-model'
 
 const WT = 'repo1::/tmp/feature'
 const PANE = 'pane'
@@ -49,18 +50,19 @@ function roundTrip(ids: string[], pane: TabGroup, pinnedIds: readonly string[] =
 }
 
 describe('tab cluster session persistence', () => {
-  it('round-trips normalized cluster presentation metadata and pane activation', () => {
+  it('round-trips the sticky member even when pane activation has moved outside its cluster', () => {
     const pane = makeTabGroup({
       id: PANE,
       worktreeId: WT,
-      activeTabId: 'b',
+      activeTabId: 'outside',
       tabOrder: ['a', 'b', 'outside'],
-      tabClusters: [cluster('c', ['a', 'b'])]
+      tabClusters: [cluster('c', ['a', 'b'], { shownTabId: 'a' })]
     })
     const restored = roundTrip(['a', 'b', 'outside'], pane)
     expect(restored.tabOrder).toEqual(['a', 'b', 'outside'])
-    expect(restored.tabClusters).toEqual([cluster('c', ['a', 'b'])])
-    expect(restored.activeTabId).toBe('b')
+    expect(restored.tabClusters).toEqual([cluster('c', ['a', 'b'], { shownTabId: 'a' })])
+    expect(restored.activeTabId).toBe('outside')
+    expect([...getHiddenClusterTabIds(restored)]).toEqual(['b'])
   })
 
   it('drops stale ids and pinned members and gives duplicate members to the first cluster', () => {
@@ -69,8 +71,8 @@ describe('tab cluster session persistence', () => {
       worktreeId: WT,
       tabOrder: ['stale', 'pin', 'a', 'b', 'c'],
       tabClusters: [
-        cluster('first', ['stale', 'pin', 'a', 'a', 'b']),
-        cluster('second', ['b', 'c'])
+        cluster('first', ['stale', 'pin', 'a', 'a', 'b'], { shownTabId: 'pin' }),
+        cluster('second', ['b', 'c'], { shownTabId: 'b' })
       ]
     })
     const restored = roundTrip(['pin', 'a', 'b', 'c'], pane, ['pin'])
@@ -146,6 +148,35 @@ describe('tab cluster session persistence', () => {
     expect(Object.hasOwn(restored.groupsByWorktree[WT][0], 'tabClusters')).toBe(false)
   })
 
+  it('discards a corrupt sticky field without losing the cluster during hydration', () => {
+    const parsed = parseWorkspaceSession({
+      ...baseSession(),
+      unifiedTabs: {
+        [WT]: ['a', 'b'].map((id) =>
+          makeUnifiedTab({ id, worktreeId: WT, groupId: PANE, contentType: 'editor' })
+        )
+      },
+      tabGroups: {
+        [WT]: [
+          {
+            id: PANE,
+            worktreeId: WT,
+            activeTabId: 'a',
+            tabOrder: ['a', 'b'],
+            tabClusters: [{ ...cluster('c', ['a', 'b']), shownTabId: 42 }]
+          }
+        ]
+      }
+    })
+    if (!parsed.ok) {
+      throw new Error('expected corrupt sticky metadata to be salvaged')
+    }
+    const restored = buildHydratedTabState(parsed.value, new Set([WT])).groupsByWorktree[WT][0]
+    expect(restored.tabOrder).toEqual(['a', 'b'])
+    expect(restored.tabClusters).toEqual([cluster('c', ['a', 'b'])])
+    expect([...getHiddenClusterTabIds(restored)]).toEqual(['b'])
+  })
+
   it('normalizes legacy persisted clusters directly against the hydrated ownership and pin state', () => {
     const ids = ['pin', 'a', 'b', 'x', 'y', 'c', 'd', 'e']
     const session: WorkspaceSessionState = {
@@ -214,14 +245,16 @@ describe('tab cluster session persistence', () => {
             id: PANE,
             worktreeId: WT,
             tabOrder: ['alias', 'other'],
-            tabClusters: [cluster('c', ['alias', 'other'])]
+            tabClusters: [cluster('c', ['alias', 'other'], { shownTabId: 'alias' })]
           })
         ]
       }
     }
     const restored = buildHydratedTabState(session, new Set([WT])).groupsByWorktree[WT][0]
     expect(restored.tabOrder).toEqual(['canonical', 'other'])
-    expect(restored.tabClusters).toEqual([cluster('c', ['canonical', 'other'])])
+    expect(restored.tabClusters).toEqual([
+      cluster('c', ['canonical', 'other'], { shownTabId: 'canonical' })
+    ])
   })
 
   it('does not persist foreign tab references as members of a different pane', () => {

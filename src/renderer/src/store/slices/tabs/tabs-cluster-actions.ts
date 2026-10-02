@@ -43,13 +43,24 @@ export function createTabsClusterActions(
       ) {
         return state
       }
+      const nextCluster = { ...cluster, ...patch }
+      if (patch.collapsed !== undefined) {
+        delete nextCluster.shownTabId
+        if (
+          patch.collapsed &&
+          found.group.activeTabId !== null &&
+          cluster.tabIds.includes(found.group.activeTabId)
+        ) {
+          nextCluster.shownTabId = found.group.activeTabId
+        }
+      }
       return {
         groupsByWorktree: {
           ...state.groupsByWorktree,
           [found.worktreeId]: updateGroup(state.groupsByWorktree[found.worktreeId], {
             ...found.group,
             tabClusters: found.group.tabClusters?.map((candidate) =>
-              candidate.id === clusterId ? { ...candidate, ...patch } : candidate
+              candidate.id === clusterId ? nextCluster : candidate
             )
           })
         }
