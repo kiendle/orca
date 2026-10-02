@@ -148,7 +148,7 @@ describe('cluster chip rename', () => {
     ).toBe('true')
   })
 
-  it('opens rename on the second mouse press after the first collapse re-renders', () => {
+  it('opens rename on the second press and restores the collapse state the first press flipped', () => {
     const view = mount()
     const chip = screen.getByRole('button', { name: 'Work' })
     fireEvent.pointerDown(chip, { button: 0, clientX: 10, clientY: 10 })
@@ -170,7 +170,8 @@ describe('cluster chip rename', () => {
     fireEvent.mouseDown(collapsedChip, { button: 0, detail: 2 })
     fireEvent.pointerUp(window, { clientX: 10, clientY: 10 })
     expect(screen.getByRole('textbox', { name: 'Rename Group' })).toBeDefined()
-    expect(actions.setTabClusterCollapsed).toHaveBeenCalledTimes(1)
+    expect(actions.setTabClusterCollapsed).toHaveBeenLastCalledWith('pane', 'cluster', false)
+    expect(actions.setTabClusterCollapsed).toHaveBeenCalledTimes(2)
   })
 
   it('does not interpret a second press that becomes a drag as rename', () => {
