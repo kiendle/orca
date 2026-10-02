@@ -19,12 +19,14 @@ export function TabClusterMenuSection({
   worktreeId,
   groupId,
   tabId,
-  isPinned
+  isPinned,
+  onQueueNewCluster
 }: {
   worktreeId: string
   groupId: string
   tabId: string
   isPinned: boolean
+  onQueueNewCluster: (create: () => void) => void
 }): React.JSX.Element | null {
   const group = useAppStore((state) =>
     state.groupsByWorktree[worktreeId]?.find((item) => item.id === groupId)
@@ -59,7 +61,7 @@ export function TabClusterMenuSection({
       <DropdownMenuSeparator />
       <DropdownMenuItem
         disabled={disabled}
-        onSelect={() => createCluster(groupId, targets.groupableTabIds)}
+        onSelect={() => onQueueNewCluster(() => createCluster(groupId, targets.groupableTabIds))}
       >
         <FolderPlus className="size-3.5" />
         {targets.tabIds.length > 1

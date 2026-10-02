@@ -28,6 +28,7 @@ import { translate } from '@/i18n/i18n'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { TabClusterMenuSection } from './TabClusterMenuSection'
+import { useTabClusterMenuCloseAction } from './use-tab-cluster-menu-close-action'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -117,6 +118,7 @@ export function EditorFileTabContextMenu({
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const closeAllShortcut = useOptionalShortcutLabel('tab.closeAll')
+  const clusterMenuAction = useTabClusterMenuCloseAction()
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
@@ -133,6 +135,9 @@ export function EditorFileTabContextMenu({
         sideOffset={0}
         align="start"
         onCloseAutoFocus={(event) => {
+          if (clusterMenuAction.runAfterClose(event)) {
+            return
+          }
           if (!skipMenuFocusRestoreRef.current) {
             return
           }
@@ -172,6 +177,7 @@ export function EditorFileTabContextMenu({
             groupId={groupId}
             tabId={unifiedTabId}
             isPinned={isPinned}
+            onQueueNewCluster={clusterMenuAction.queueAfterClose}
           />
         ) : null}
         <DropdownMenuSeparator />

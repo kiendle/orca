@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import type { RenderResult } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { TabCluster, TabGroup } from '../../../../shared/tab-types'
@@ -36,8 +37,8 @@ const CLUSTER: TabCluster = {
   tabIds: ['a', 'b', 'c']
 }
 
-function mount(cluster: TabCluster = CLUSTER, autoRename = false): void {
-  render(
+function mount(cluster: TabCluster = CLUSTER, autoRename = false): RenderResult {
+  return render(
     <TooltipProvider>
       <TabClusterChip
         cluster={cluster}
@@ -145,6 +146,42 @@ describe('cluster chip rename', () => {
     expect(
       screen.getByRole('button', { name: 'Unnamed group' }).getAttribute('aria-expanded')
     ).toBe('true')
+  })
+
+  it('opens rename on the second mouse press after the first collapse re-renders', () => {
+    const view = mount()
+    const chip = screen.getByRole('button', { name: 'Work' })
+    fireEvent.pointerDown(chip, { button: 0, clientX: 10, clientY: 10 })
+    fireEvent.mouseDown(chip, { button: 0, detail: 1 })
+    fireEvent.pointerUp(window, { clientX: 10, clientY: 10 })
+    expect(actions.setTabClusterCollapsed).toHaveBeenCalledWith('pane', 'cluster', true)
+    view.rerender(
+      <TooltipProvider>
+        <TabClusterChip
+          cluster={{ ...CLUSTER, collapsed: true }}
+          groupId="pane"
+          worktreeId="wt"
+          onClose={() => {}}
+        />
+      </TooltipProvider>
+    )
+    const collapsedChip = screen.getByRole('button', { name: 'Work' })
+    fireEvent.pointerDown(collapsedChip, { button: 0, clientX: 10, clientY: 10 })
+    fireEvent.mouseDown(collapsedChip, { button: 0, detail: 2 })
+    fireEvent.pointerUp(window, { clientX: 10, clientY: 10 })
+    expect(screen.getByRole('textbox', { name: 'Rename Group' })).toBeDefined()
+    expect(actions.setTabClusterCollapsed).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not interpret a second press that becomes a drag as rename', () => {
+    mount()
+    const chip = screen.getByRole('button', { name: 'Work' })
+    fireEvent.pointerDown(chip, { button: 0, clientX: 10, clientY: 10 })
+    fireEvent.mouseDown(chip, { button: 0, detail: 2 })
+    fireEvent.pointerUp(window, { clientX: 30, clientY: 10 })
+    fireEvent.doubleClick(chip)
+    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(actions.setTabClusterCollapsed).not.toHaveBeenCalled()
   })
 
   it('commits a trimmed name on Enter and leaves the editing state', () => {

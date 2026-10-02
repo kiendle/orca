@@ -43,6 +43,7 @@ import { BrowserFavicon } from '@/components/browser-favicon'
 import type { TabStripInteractionProps } from './tab-strip-selection'
 import { TabClusterMemberIndicator } from './TabClusterMemberIndicator'
 import { TabClusterMenuSection } from './TabClusterMenuSection'
+import { useTabClusterMenuCloseAction } from './use-tab-cluster-menu-close-action'
 
 export function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
@@ -118,6 +119,7 @@ export default function BrowserTab({
   })
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
+  const clusterMenuAction = useTabClusterMenuCloseAction()
 
   // Why: about:blank and other non-http URLs should not be sent to the
   // system browser. Disable the context menu item instead of silently
@@ -277,6 +279,7 @@ export default function BrowserTab({
           )}
           sideOffset={0}
           align="start"
+          onCloseAutoFocus={clusterMenuAction.runAfterClose}
         >
           <TabWorkspaceLayoutMenuSection
             unifiedTabId={dragData.unifiedTabId}
@@ -304,6 +307,7 @@ export default function BrowserTab({
               groupId={dragData.groupId}
               tabId={dragData.unifiedTabId}
               isPinned={isPinned}
+              onQueueNewCluster={clusterMenuAction.queueAfterClose}
             />
           ) : null}
           <DropdownMenuSeparator />
