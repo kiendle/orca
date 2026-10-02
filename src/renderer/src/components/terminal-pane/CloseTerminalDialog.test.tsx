@@ -7,8 +7,16 @@ import CloseTerminalDialog, { type CloseTerminalDialogTerminal } from './CloseTe
 import { translate } from '@/i18n/i18n'
 
 vi.mock('@/i18n/i18n', () => ({
-  translate: vi.fn((_key: string, fallback: string, options?: { count?: number }) =>
-    options?.count === undefined ? fallback : fallback.replace('{{count}}', String(options.count))
+  translate: vi.fn(
+    (_key: string, fallback: string, options?: { count?: number; defaultValue_one?: string }) => {
+      if (options?.count === undefined) {
+        return fallback
+      }
+      // Why: mirrors i18next picking the `_one` default for a count of 1.
+      const text =
+        options.count === 1 && options.defaultValue_one ? options.defaultValue_one : fallback
+      return text.replace('{{count}}', String(options.count))
+    }
   )
 }))
 
@@ -221,6 +229,18 @@ describe('CloseTerminalDialog', () => {
     await act(async () => clickButton('Stop and Close'))
 
     expect(onConfirm).toHaveBeenCalledWith(false)
+  })
+
+  it('uses singular copy when only one group member is running', async () => {
+    await renderDialog({
+      terminals: [{ ...GROUP_TERMINALS[0]!, copyKind: 'command' }],
+      tabLabel: 'Backend',
+      onConfirm: vi.fn()
+    })
+
+    expect(document.body.textContent).toContain('Closing this group will stop 1 running terminal.')
+    expect(document.body.textContent).toContain('Show 1 running terminal')
+    expect(document.body.textContent).not.toContain('1 running terminals')
   })
 
   it('collapses the terminal list and clears the skip preference on reopen or subject change', async () => {

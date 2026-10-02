@@ -3205,6 +3205,8 @@
             "stop_command_confirm": "Stop and Close",
             "stop_agents_title": "Stop these agents?",
             "stop_group_description": "Closing this group will stop {{count}} running terminals.",
+            "stop_group_description_one": "Closing this group will stop {{count}} running terminal.",
+            "stop_group_description_other": "Closing this group will stop {{count}} running terminals.",
             "stop_commands_title": "Stop running commands?"
           },
           "MobileDriverOverlay": {
@@ -3451,6 +3453,8 @@
           "CloseTerminalGroupList": {
             "hide_terminals": "Hide running terminals",
             "show_terminals": "Show {{count}} running terminals",
+            "show_terminals_one": "Show {{count}} running terminal",
+            "show_terminals_other": "Show {{count}} running terminals",
             "running_terminals": "Running terminals",
             "agent": "Agent"
           }

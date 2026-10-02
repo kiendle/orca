@@ -169,7 +169,11 @@ export function renderTabBarSurface({
               .filter(Boolean)
               .join(' ')}
             onKeyDown={(event) => {
-              if (event.key === 'Escape' && !(event.target instanceof HTMLInputElement)) {
+              if (
+                event.key === 'Escape' &&
+                !(event.target instanceof HTMLInputElement) &&
+                clusterInteractions.highlightedTabIds.size > 0
+              ) {
                 event.stopPropagation()
                 clusterInteractions.clearSelection()
               }

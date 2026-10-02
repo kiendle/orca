@@ -156,7 +156,10 @@ function CloseTerminalDialogBody({
             ? translate(
                 'auto.components.terminal.pane.CloseTerminalDialog.stop_group_description',
                 'Closing this group will stop {{count}} running terminals.',
-                { count: terminals.length }
+                {
+                  count: terminals.length,
+                  defaultValue_one: 'Closing this group will stop {{count}} running terminal.'
+                }
               )
             : isAgent
               ? translate(

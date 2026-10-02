@@ -35,7 +35,7 @@ export function CloseTerminalGroupList({
               : translate(
                   'auto.components.terminal.pane.CloseTerminalGroupList.show_terminals',
                   'Show {{count}} running terminals',
-                  { count: terminals.length }
+                  { count: terminals.length, defaultValue_one: 'Show {{count}} running terminal' }
                 )}
           </span>
         </Button>
