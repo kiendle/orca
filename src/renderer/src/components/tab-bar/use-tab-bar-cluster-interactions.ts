@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
-import type { TabGroup } from '../../../../shared/tab-types'
+import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
+import { guardRunningTerminalGroupClose } from '../terminal/running-terminal-close-guard'
+import type { TabCluster, TabGroup } from '../../../../shared/tab-types'
+import {
+  resolveTerminalTabTitle,
+  resolveUnifiedTabLabel
+} from '../../../../shared/tab-title-resolution'
 import type { TabBarProps } from './tab-bar-props'
 import type { TabBarItem } from './tab-bar-item-model'
 import { resolveTabStripSelection, type TabStripActivationModifiers } from './tab-strip-selection'
@@ -10,7 +16,7 @@ export type TabBarClusterInteractions = {
   autoRenameClusterIds: ReadonlySet<string>
   selectTab: (tabId: string, modifiers: TabStripActivationModifiers) => boolean
   clearSelection: () => void
-  closeCluster: (tabIds: readonly string[]) => void
+  closeCluster: (cluster: TabCluster) => void
 }
 
 export function useTabBarClusterInteractions({
@@ -83,25 +89,56 @@ export function useTabBarClusterInteractions({
     () => new Map(allItems.map((item) => [item.unifiedTabId, item])),
     [allItems]
   )
-  const closeCluster = (tabIds: readonly string[]): void => {
-    // Why: never use store bulk-close; every member must retain the strip's terminal and dirty-file confirmations.
-    for (const tabId of tabIds) {
-      if (props.onCloseTab) {
-        props.onCloseTab(tabId)
-        continue
-      }
+  const closeCluster = (cluster: TabCluster): void => {
+    const state = useAppStore.getState()
+    const tabIds = [...cluster.tabIds]
+    const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
+    const unifiedTabById = new Map(
+      (state.unifiedTabsByWorktree[props.worktreeId] ?? []).map((tab) => [tab.id, tab])
+    )
+    // Why: collapsed members disappear from visibleItems, not from the group's close.
+    const terminals = tabIds.flatMap((tabId) => {
       const item = itemByUnifiedId.get(tabId)
-      if (!item) {
-        continue
+      const tab = unifiedTabById.get(tabId)
+      if (tab?.contentType === 'terminal') {
+        return [
+          {
+            terminalTabId: tab.entityId,
+            tabLabel:
+              item?.type === 'terminal'
+                ? resolveTerminalTabTitle(item.data, generatedTitlesEnabled, item.data.title)
+                : resolveUnifiedTabLabel(tab, generatedTitlesEnabled)
+          }
+        ]
       }
-      if (item.type === 'browser') {
-        props.onCloseBrowserTab?.(item.id)
-      } else if (item.type === 'editor' || item.type === 'simulator') {
-        props.onCloseFile?.(item.id)
-      } else {
-        props.onClose(item.id)
+      return item?.type === 'terminal'
+        ? [
+            {
+              terminalTabId: item.id,
+              tabLabel: resolveTerminalTabTitle(item.data, generatedTitlesEnabled, item.data.title)
+            }
+          ]
+        : []
+    })
+    guardRunningTerminalGroupClose({
+      subjectKey: `tab-cluster:${cluster.id}`,
+      groupLabel: cluster.name,
+      terminals,
+      onClose: () => {
+        if (props.onCloseTabs) {
+          props.onCloseTabs(tabIds)
+          return
+        }
+        // Why: legacy hosts still need bulk routing, or confirmation would requeue each terminal.
+        for (const tabId of tabIds) {
+          dispatchWorkspaceTabCommand({
+            type: 'close',
+            target: { kind: 'tab', worktreeId: props.worktreeId, tabId },
+            bulk: true
+          })
+        }
       }
-    }
+    })
   }
   return { highlightedTabIds, autoRenameClusterIds, selectTab, clearSelection, closeCluster }
 }

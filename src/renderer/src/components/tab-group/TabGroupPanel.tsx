@@ -140,6 +140,7 @@ export default function TabGroupPanel({
         closeTerminalTab(terminalId)
       }}
       onCloseTab={commands.closeItem}
+      onCloseTabs={commands.closeMany}
       onCloseOthers={(visibleId) => {
         // Why: TabBar emits entityId for terminals/browsers but unifiedTabId for editors; match both so the menu works on every tab kind.
         const item = resolveGroupTabFromVisibleId(model.groupTabs, visibleId)

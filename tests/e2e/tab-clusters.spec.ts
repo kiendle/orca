@@ -11,7 +11,12 @@ import {
   waitForStartupWorktreeRefresh
 } from './helpers/store'
 import { SORTABLE_TAB } from './helpers/terminal-tab-menu'
-import { waitForActivePanePtyId, waitForActiveTerminalManager } from './helpers/terminal'
+import {
+  execInTerminal,
+  waitForActivePanePtyId,
+  waitForActiveTerminalManager,
+  waitForTerminalOutput
+} from './helpers/terminal'
 
 type StripTerminalTab = { id: string; entityId: string }
 type ClusterPane = { worktreeId: string; groupId: string; tabs: StripTerminalTab[] }
@@ -233,7 +238,10 @@ test.describe('Tab clusters', () => {
     const chip = clusterChip(orcaPage, pane.groupId, regrouped.clusterId)
     await chip.click({ button: 'right' })
     await orcaPage.getByRole('menuitem', { name: 'Close Group', exact: true }).click()
-    const confirmation = orcaPage.getByRole('dialog', { name: 'Stop running command?' })
+    const confirmation = orcaPage.getByRole('dialog', {
+      name: 'Stop running commands?',
+      exact: true
+    })
     for (const member of regrouped.members) {
       const tab = terminalTab(orcaPage, pane.groupId, member)
       // Why: a shell still starting can briefly require confirmation even without a launched command.
@@ -251,6 +259,130 @@ test.describe('Tab clusters', () => {
     await expect.poll(async () => (await readPane(orcaPage, pane))?.tabClusters ?? []).toEqual([])
     await expect(chip).toBeHidden()
     await expect(terminalTab(orcaPage, pane.groupId, regrouped.outside)).toBeVisible()
+  })
+
+  test('warns once for all running group members, cancels atomically, and closes them together', async ({
+    orcaPage
+  }) => {
+    const pane = await prepareTerminalPane(orcaPage)
+    const { clusterId, members, outside } = await createNamedClusterFromMenu(
+      orcaPage,
+      pane,
+      'Busy group'
+    )
+    const [buildTab, testTab] = members
+    if (!buildTab || !testTab) {
+      throw new Error('The group must contain two running terminals')
+    }
+    const labelledTabs = [
+      { tab: buildTab, title: 'Cluster build worker' },
+      { tab: testTab, title: 'Cluster test worker' },
+      { tab: outside, title: 'Cluster idle shell' }
+    ]
+    for (const { tab, title } of labelledTabs) {
+      const tabElement = terminalTab(orcaPage, pane.groupId, tab)
+      await tabElement.dblclick()
+      const renameInput = tabElement.getByRole('textbox')
+      await renameInput.fill(title)
+      await renameInput.press('Enter')
+      await expect(tabElement).toHaveAttribute('data-tab-title', title)
+      await tabElement.click()
+      await waitForActiveTerminalManager(orcaPage)
+      const ptyId = await waitForActivePanePtyId(orcaPage)
+      const readyMarker = `cluster-close-ready-${tab.entityId}`
+      await execInTerminal(orcaPage, ptyId, `echo ${readyMarker}`)
+      await waitForTerminalOutput(orcaPage, readyMarker, 20_000)
+      if (tab.id !== outside.id) {
+        await execInTerminal(orcaPage, ptyId, 'sleep 300')
+        await expect
+          .poll(
+            async () =>
+              (await orcaPage.evaluate((id) => window.api.pty.inspectProcess(id), ptyId))
+                .foregroundProcess,
+            { timeout: 20_000, message: 'sleep 300 never became the foreground process' }
+          )
+          .toBe('sleep')
+      }
+    }
+    await terminalTab(orcaPage, pane.groupId, outside).click({ button: 'right' })
+    await orcaPage.getByRole('menuitem', { name: 'Add to Group', exact: true }).hover()
+    await orcaPage.getByRole('menuitem', { name: 'Busy group', exact: true }).click()
+    const memberIds = labelledTabs.map(({ tab }) => tab.id)
+    await expect
+      .poll(() => readCluster(orcaPage, pane, clusterId))
+      .toMatchObject({ tabIds: memberIds })
+
+    const chip = clusterChip(orcaPage, pane.groupId, clusterId)
+    await chip.click({ button: 'right' })
+    await orcaPage.getByRole('menuitem', { name: 'Close Group', exact: true }).click()
+    const confirmation = orcaPage.getByRole('dialog', {
+      name: 'Stop running commands?',
+      exact: true
+    })
+    await expect(confirmation).toBeVisible()
+    await expect(orcaPage.getByRole('dialog')).toHaveCount(1)
+    await expect(confirmation).toContainText('Closing this group will stop 2 running terminals.')
+    await expect(confirmation.getByText('Busy group', { exact: true })).toBeVisible()
+    await expect(
+      confirmation.getByRole('checkbox', {
+        name: "Don't ask again for running terminals",
+        exact: true
+      })
+    ).toBeVisible()
+    const runningTerminals = confirmation.getByRole('region', {
+      name: 'Running terminals',
+      exact: true
+    })
+    await expect(runningTerminals).toBeHidden()
+    await confirmation
+      .getByRole('button', { name: 'Show 2 running terminals', exact: true })
+      .click()
+    await expect(runningTerminals).toBeVisible()
+    await expect(runningTerminals.getByText('Cluster build worker', { exact: true })).toBeVisible()
+    await expect(runningTerminals.getByText('Cluster test worker', { exact: true })).toBeVisible()
+    await expect(runningTerminals.getByText('Cluster idle shell', { exact: true })).toHaveCount(0)
+    await expect(runningTerminals.getByRole('listitem')).toHaveCount(2)
+    await expect(
+      confirmation.getByRole('button', { name: 'Hide running terminals', exact: true })
+    ).toBeVisible()
+    await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(confirmation).toBeHidden()
+    await expect
+      .poll(() => readCluster(orcaPage, pane, clusterId))
+      .toMatchObject({ tabIds: memberIds })
+    for (const { tab } of labelledTabs) {
+      await expect(terminalTab(orcaPage, pane.groupId, tab)).toBeVisible()
+    }
+    await expect(chip).toHaveText('Busy group')
+
+    await chip.click({ button: 'right' })
+    await orcaPage.getByRole('menuitem', { name: 'Close Group', exact: true }).click()
+    await expect(confirmation).toBeVisible()
+    await confirmation.getByRole('button', { name: 'Stop and Close', exact: true }).click()
+    await expect(confirmation).toBeHidden()
+    await expect.poll(() => getWorktreeTabs(orcaPage, pane.worktreeId)).toEqual([])
+    await expect.poll(() => readCluster(orcaPage, pane, clusterId)).toBeUndefined()
+    for (const { tab } of labelledTabs) {
+      await expect(terminalTab(orcaPage, pane.groupId, tab)).toBeHidden()
+    }
+    const warningDialog = orcaPage.getByRole('dialog', {
+      name: /^Stop (?:running commands?|these agents|this agent)\?$/
+    })
+    let sawAnotherDialog = false
+    const observationStarted = Date.now()
+    await expect
+      .poll(
+        async () => {
+          sawAnotherDialog ||= await warningDialog.isVisible()
+          return sawAnotherDialog || Date.now() - observationStarted >= 1_500
+        },
+        { timeout: 3_000, intervals: [100] }
+      )
+      .toBe(true)
+    expect(sawAnotherDialog, 'Confirming the group must not queue another terminal warning').toBe(
+      false
+    )
+    await expect(chip).toBeHidden()
   })
 
   test('restores a named collapsed cluster after an app restart', async ({

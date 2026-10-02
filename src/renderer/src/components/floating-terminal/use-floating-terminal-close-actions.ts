@@ -214,6 +214,7 @@ export function useFloatingTerminalCloseActions({
 
   return {
     closeFloatingItemConfirmed,
+    closeFloatingItems,
     closeOthers,
     closeToRight,
     closeToLeft,

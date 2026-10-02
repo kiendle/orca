@@ -16,6 +16,8 @@ export type TabBarProps = {
   onClose: (tabId: string) => void
   /** Closes a unified tab through the pane's confirmation-aware single-tab UI path. */
   onCloseTab?: (tabId: string) => void
+  /** Closes unified tabs after group confirmation, retaining dirty-editor save prompts. */
+  onCloseTabs?: (tabIds: string[]) => void
   onCloseOthers: (tabId: string) => void
   onCloseToRight: (tabId: string) => void
   onCloseToLeft: (tabId: string) => void
