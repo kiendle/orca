@@ -17,7 +17,7 @@ import {
   type TabStripDragItemData,
   type TabDropZone
 } from './tab-drag-data'
-import { canSplitTabClusterLocally } from './tab-cluster-split-availability'
+import { getTabClusterSplitBlocker } from './tab-cluster-split-availability'
 
 export type HoveredTabDropTarget = {
   groupId: string
@@ -123,7 +123,7 @@ export function useTabDragHoverPreview({
         geometry: dragGeometryRef.current
       })
       const blockedClusterSplit =
-        isTabClusterDragData(activeData) && !canSplitTabClusterLocally(state, worktreeId)
+        isTabClusterDragData(activeData) && getTabClusterSplitBlocker(state, worktreeId) !== null
       updateHoveredDropTargetFromSplit(blockedClusterSplit ? null : splitTarget)
       if (splitTarget) {
         tabInsertion.clear()

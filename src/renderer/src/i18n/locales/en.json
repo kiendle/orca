@@ -18349,7 +18349,9 @@
         "purple": "Purple",
         "cyan": "Cyan",
         "orange": "Orange"
-      }
+      },
+      "moveToSplitUnavailableRemote": "Not available for workspaces on a remote Orca server. Drag the group into an existing split instead.",
+      "moveToSplitUnavailableFloating": "Not available in the floating terminal panel."
     }
   },
   "dashboardPopout": {

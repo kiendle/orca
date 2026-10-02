@@ -21,7 +21,7 @@ import {
   type TabStripDragItemData
 } from './tab-drag-data'
 import { resolveTabClusterDropTarget } from './tab-cluster-drop-target'
-import { canSplitTabClusterLocally } from './tab-cluster-split-availability'
+import { getTabClusterSplitBlocker } from './tab-cluster-split-availability'
 
 export function commitTabDragDrop({
   event,
@@ -68,7 +68,7 @@ export function commitTabDragDrop({
     geometry: dragGeometryRef.current
   })
   if (paneColumnSplit) {
-    if (isTabClusterDragData(activeData) && !canSplitTabClusterLocally(state, worktreeId)) {
+    if (isTabClusterDragData(activeData) && getTabClusterSplitBlocker(state, worktreeId)) {
       finishDrag(true)
       return
     }
