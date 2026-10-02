@@ -101,6 +101,44 @@ describe('resolveTabNumberShortcutTarget', () => {
     ).toBe(second)
   })
 
+  it('numbers visible tabs through Cmd/Ctrl+9 and retains the active collapsed member', () => {
+    const outside = Array.from({ length: 8 }, (_, index) => `outside-${index}`)
+    const tabOrder = [
+      outside[0],
+      'hidden-before',
+      'active-member',
+      'hidden-after',
+      ...outside.slice(1)
+    ]
+    const tabs = tabOrder.map((id) => tab({ id, groupId: 'group-a' }))
+    const group: TabGroup = {
+      id: 'group-a',
+      worktreeId: 'wt-1',
+      activeTabId: 'active-member',
+      tabOrder,
+      tabClusters: [
+        {
+          id: 'cluster',
+          name: 'Work',
+          color: 'blue',
+          collapsed: true,
+          tabIds: ['hidden-before', 'active-member', 'hidden-after']
+        }
+      ]
+    }
+    const current = state({ groups: [group], tabs })
+
+    expect(resolveTabNumberShortcutTarget(current, 0)?.id).toBe('outside-0')
+    expect(resolveTabNumberShortcutTarget(current, 1)?.id).toBe('active-member')
+    expect(resolveTabNumberShortcutTarget(current, 2)?.id).toBe('outside-1')
+    expect(resolveTabNumberShortcutTarget(current, 8)?.id).toBe('outside-7')
+    expect(resolveTabNumberShortcutTarget(current, 9)).toBeNull()
+
+    const away = state({ groups: [{ ...group, activeTabId: 'outside-0' }], tabs })
+    expect(resolveTabNumberShortcutTarget(away, 1)?.id).toBe('outside-1')
+    expect(resolveTabNumberShortcutTarget(away, 8)).toBeNull()
+  })
+
   it('uses only the active split group', () => {
     const otherGroupTab = tab({ id: 'tab-other', groupId: 'group-a' })
     const activeGroupTab = tab({ id: 'tab-active', groupId: 'group-b' })

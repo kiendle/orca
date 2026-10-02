@@ -4,6 +4,8 @@ import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contrac
 import { isPaneColumnSplitDropNoOp } from '../pane-column-split-drop-no-op'
 import { collapseGroupLayout, buildSplitNode, replaceLeaf } from './tabs-layout'
 import { buildActiveSurfacePatch } from './tabs-surface'
+import { applyTransferredTabClusterMembership } from './tab-cluster-transfer'
+import { promoteClusterPreviewTabs } from './tabs-cluster-strip-actions'
 import {
   dedupeTabOrder,
   findGroupAndWorktree,
@@ -20,6 +22,18 @@ export function createTabsDropActions(
 ): Pick<TabsSlice, 'dropUnifiedTab'> {
   return {
     dropUnifiedTab: (tabId, target) => {
+      if (target.clusterId && !target.splitDirection) {
+        const state = get()
+        const foundTab = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+        const foundTarget = findGroupAndWorktree(state.groupsByWorktree, target.groupId)
+        if (
+          foundTab &&
+          foundTarget?.worktreeId === foundTab.worktreeId &&
+          foundTarget.group.tabClusters?.some((cluster) => cluster.id === target.clusterId)
+        ) {
+          promoteClusterPreviewTabs(get, foundTab.tab.groupId, [tabId])
+        }
+      }
       let moved = false
       set((state) => {
         const foundTab = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
@@ -108,29 +122,44 @@ export function createTabsDropActions(
           (sourceGroup.recentTabIds ?? []).filter((id) => id !== tabId),
           sourceOrder
         )
+        const pinnedTabIds = new Set(
+          (state.unifiedTabsByWorktree[worktreeId] ?? [])
+            .filter((candidate) => candidate.isPinned)
+            .map((candidate) => candidate.id)
+        )
         nextGroups = nextGroups.map((group) => {
           if (group.id === sourceGroup.id) {
-            return {
-              ...group,
-              activeTabId:
-                group.activeTabId === tabId
-                  ? // Why: same MRU-aware fallback as moveUnifiedTabToGroup — the drag keeps the user on their previously-active tab.
-                    pickNextActiveTab(dedupedSourceGroupOrder, sourceGroup.recentTabIds, tabId)
-                  : group.activeTabId,
-              tabOrder: sourceOrder,
-              recentTabIds: sourceRecentTabIds
-            }
+            return applyTransferredTabClusterMembership(
+              {
+                ...group,
+                activeTabId:
+                  group.activeTabId === tabId
+                    ? // Why: same MRU-aware fallback as moveUnifiedTabToGroup — the drag keeps the user on their previously-active tab.
+                      pickNextActiveTab(dedupedSourceGroupOrder, sourceGroup.recentTabIds, tabId)
+                    : group.activeTabId,
+                tabOrder: sourceOrder,
+                recentTabIds: sourceRecentTabIds
+              },
+              tabId,
+              null,
+              pinnedTabIds
+            )
           }
           if (group.id === resolvedTargetGroupId) {
-            return {
-              ...group,
-              activeTabId: tabId,
-              tabOrder: targetOrder,
-              recentTabIds: pushRecentTabId(
-                sanitizeRecentTabIds(group.recentTabIds, targetOrder),
-                tabId
-              )
-            }
+            return applyTransferredTabClusterMembership(
+              {
+                ...group,
+                activeTabId: tabId,
+                tabOrder: targetOrder,
+                recentTabIds: pushRecentTabId(
+                  sanitizeRecentTabIds(group.recentTabIds, targetOrder),
+                  tabId
+                )
+              },
+              tabId,
+              isSplitDrop ? null : target.clusterId,
+              pinnedTabIds
+            )
           }
           return group
         })

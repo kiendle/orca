@@ -9,8 +9,9 @@ import {
 import {
   canDropTabIntoPaneBody,
   isPaneDropData,
-  isTabDragData,
-  type TabDragItemData
+  isTabClusterDragData,
+  isTabStripDragData,
+  type TabStripDragItemData
 } from './tab-drag-data'
 
 export type TabGroupPanelGeometryEntry = {
@@ -137,7 +138,7 @@ export function resolvePanelEdgePaneColumnSplit({
   panelRect: providedPanelRect,
   bodyRect: providedBodyRect
 }: {
-  activeDrag: TabDragItemData
+  activeDrag: TabStripDragItemData
   targetGroupId: string
   worktreeId: string
   pointer: { x: number; y: number }
@@ -174,12 +175,19 @@ export function resolvePanelEdgePaneColumnSplit({
   const sourceGroup = (groupsByWorktree[worktreeId] ?? []).find(
     (group) => group.id === activeDrag.groupId
   )
+  const cluster = isTabClusterDragData(activeDrag)
+    ? sourceGroup?.tabClusters?.find((item) => item.id === activeDrag.clusterId)
+    : null
+  const sourceTabCount =
+    cluster && sourceGroup?.tabOrder.every((id) => cluster.tabIds.includes(id))
+      ? 1
+      : (sourceGroup?.tabOrder.length ?? 0)
   if (
     isPaneColumnSplitDropNoOp({
       sourceGroupId: activeDrag.groupId,
       targetGroupId,
       splitDirection: zone,
-      sourceTabCount: sourceGroup?.tabOrder.length ?? 0,
+      sourceTabCount,
       layout: layoutByWorktree[worktreeId]
     })
   ) {
@@ -208,7 +216,8 @@ export function resolveActivePaneColumnSplitTarget({
   layoutByWorktree,
   worktreeId,
   getDragPointer,
-  geometry
+  geometry,
+  allowTabClusterSplit = true
 }: {
   event: DragMoveEvent | DragOverEvent | DragEndEvent
   groupsByWorktree: Record<string, TabGroup[]>
@@ -219,17 +228,23 @@ export function resolveActivePaneColumnSplitTarget({
     y: number
   } | null
   geometry?: TabGroupPanelGeometrySnapshot | null
+  allowTabClusterSplit?: boolean
 }): ActivePaneColumnSplitTarget | null {
   const activeData = event.active.data.current
   const pointer = getDragPointer(event)
-  if (!isTabDragData(activeData) || !pointer) {
+  if (
+    !isTabStripDragData(activeData) ||
+    activeData.worktreeId !== worktreeId ||
+    (isTabClusterDragData(activeData) && !allowTabClusterSplit) ||
+    !pointer
+  ) {
     return null
   }
 
   const overData = event.over?.data.current
   const panelHit = findTabGroupPanelUnderPointer(worktreeId, pointer, { geometry })
 
-  if (isTabDragData(overData)) {
+  if (isTabStripDragData(overData)) {
     // Why: tab-strip drags target reorder/insertion slots. Split creation stays
     // on pane/body edges so hovering over a tab never surprises the user with a
     // new split.
@@ -240,7 +255,7 @@ export function resolveActivePaneColumnSplitTarget({
 
   const targetGroupId =
     panelHit?.groupId ??
-    (isTabDragData(overData) ? overData.groupId : null) ??
+    (isTabStripDragData(overData) ? overData.groupId : null) ??
     (isPaneDropData(overData) ? overData.groupId : null)
 
   if (!targetGroupId) {

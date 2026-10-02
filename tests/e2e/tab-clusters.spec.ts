@@ -1,0 +1,381 @@
+import type { ElectronApplication, Page } from '@stablyai/playwright-test'
+import { test, expect } from './helpers/orca-app'
+import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import {
+  ensureTerminalVisible,
+  getActiveTabId,
+  getActiveWorktreeId,
+  getWorktreeTabs,
+  waitForActiveWorktree,
+  waitForSessionReady,
+  waitForStartupWorktreeRefresh
+} from './helpers/store'
+import { SORTABLE_TAB } from './helpers/terminal-tab-menu'
+import { waitForActivePanePtyId, waitForActiveTerminalManager } from './helpers/terminal'
+
+type StripTerminalTab = { id: string; entityId: string }
+type ClusterPane = { worktreeId: string; groupId: string; tabs: StripTerminalTab[] }
+
+const selectionModifier = process.platform === 'darwin' ? 'Meta' : 'Control'
+
+function paneStrip(page: Page, groupId: string) {
+  return page.locator(`[data-tab-group-strip-id="${groupId}"]`)
+}
+
+function terminalTab(page: Page, groupId: string, tab: StripTerminalTab) {
+  return paneStrip(page, groupId).locator(`${SORTABLE_TAB}[data-tab-id="${tab.entityId}"]`)
+}
+
+function clusterChip(page: Page, groupId: string, clusterId: string) {
+  return paneStrip(page, groupId).locator(`[data-tab-cluster-chip="${clusterId}"]`)
+}
+
+async function readPanes(page: Page, worktreeId: string) {
+  return page.evaluate((id) => window.__store?.getState().groupsByWorktree[id] ?? [], worktreeId)
+}
+
+async function readPane(page: Page, pane: Pick<ClusterPane, 'worktreeId' | 'groupId'>) {
+  return (await readPanes(page, pane.worktreeId)).find((group) => group.id === pane.groupId)
+}
+
+async function readCluster(page: Page, pane: ClusterPane, clusterId: string) {
+  return (await readPane(page, pane))?.tabClusters?.find((cluster) => cluster.id === clusterId)
+}
+
+async function prepareTerminalPane(page: Page): Promise<ClusterPane> {
+  await waitForSessionReady(page)
+  await waitForStartupWorktreeRefresh(page)
+  const worktreeId = await waitForActiveWorktree(page)
+  await ensureTerminalVisible(page)
+  const initialTabId = await getActiveTabId(page)
+  if (!initialTabId) {
+    throw new Error('No initial terminal tab is active')
+  }
+  await expect(page.locator(`${SORTABLE_TAB}[data-tab-id="${initialTabId}"]`)).toBeVisible()
+  // Why: the "+" menu is nonmodal and a just-spawned terminal's focus can close it mid-click.
+  for (let created = 0; created < 2; created += 1) {
+    const tabsBefore = await page.locator(SORTABLE_TAB).count()
+    await page.evaluate(() => document.body.focus())
+    await page.keyboard.press(`${selectionModifier}+t`)
+    await expect.poll(() => page.locator(SORTABLE_TAB).count()).toBe(tabsBefore + 1)
+    await waitForActiveTerminalManager(page)
+    await waitForActivePanePtyId(page)
+  }
+
+  await expect.poll(() => getWorktreeTabs(page, worktreeId)).toHaveLength(3)
+  const pane = await page.evaluate((id) => {
+    const state = window.__store?.getState()
+    if (!state) {
+      throw new Error('The app store is unavailable')
+    }
+    const group = state.groupsByWorktree[id]?.find(
+      (candidate) => candidate.id === state.activeGroupIdByWorktree[id]
+    )
+    if (!group) {
+      throw new Error('No active pane exists for the terminal tabs')
+    }
+    const tabs = group.tabOrder.flatMap((tabId) => {
+      const tab = state.unifiedTabsByWorktree[id]?.find(
+        (candidate) => candidate.id === tabId && candidate.contentType === 'terminal'
+      )
+      return tab ? [{ id: tab.id, entityId: tab.entityId }] : []
+    })
+    return { worktreeId: id, groupId: group.id, tabs }
+  }, worktreeId)
+  expect(pane.tabs).toHaveLength(3)
+  for (const tab of pane.tabs) {
+    await expect(terminalTab(page, pane.groupId, tab)).toBeVisible()
+  }
+  return pane
+}
+
+async function createNamedClusterFromMenu(page: Page, pane: ClusterPane, name: string) {
+  const [first, outside, last] = pane.tabs
+  if (!first || !outside || !last) {
+    throw new Error('Grouping requires three terminal tabs')
+  }
+  const members = [first, last]
+  const memberIds = members.map((tab) => tab.id)
+  await terminalTab(page, pane.groupId, outside).click()
+  // Why: the first toggle seeds the active tab; toggling it off leaves two nonadjacent members.
+  for (const tab of [first, last, outside]) {
+    await terminalTab(page, pane.groupId, tab).click({ modifiers: [selectionModifier] })
+  }
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (groupId) => window.__store?.getState().tabSelectionByGroupId[groupId]?.tabIds ?? [],
+        pane.groupId
+      )
+    )
+    .toEqual(memberIds)
+  for (const tab of members) {
+    await expect(terminalTab(page, pane.groupId, tab)).toHaveAttribute(
+      'data-tab-highlighted',
+      'true'
+    )
+  }
+  await expect(terminalTab(page, pane.groupId, outside)).not.toHaveAttribute(
+    'data-tab-highlighted',
+    'true'
+  )
+  await expect(terminalTab(page, pane.groupId, outside)).toHaveAttribute('data-active', 'true')
+
+  await terminalTab(page, pane.groupId, first).click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'Add 2 Tabs to New Group', exact: true }).click()
+  const renameInput = paneStrip(page, pane.groupId).getByRole('textbox', {
+    name: 'Rename Group',
+    exact: true
+  })
+  await expect(renameInput).toBeVisible()
+  await expect(renameInput).toBeFocused()
+  const clusterId = await renameInput.getAttribute('data-tab-cluster-rename-input')
+  if (!clusterId) {
+    throw new Error('The new group has no inline rename identity')
+  }
+  await expect(clusterChip(page, pane.groupId, clusterId)).toBeVisible()
+  await page.keyboard.type(name)
+  await page.keyboard.press('Enter')
+  await expect(renameInput).toBeHidden()
+  await expect
+    .poll(() => readCluster(page, pane, clusterId))
+    .toMatchObject({ name, tabIds: memberIds, collapsed: false })
+  await expect
+    .poll(async () => {
+      const group = await readPane(page, pane)
+      const start = group?.tabOrder.indexOf(first.id) ?? -1
+      return group?.tabOrder.slice(start, start + members.length)
+    })
+    .toEqual(memberIds)
+  await expect(clusterChip(page, pane.groupId, clusterId)).toHaveText(name)
+  return { clusterId, members, memberIds, outside }
+}
+
+test.describe('Tab clusters', () => {
+  test('groups highlighted tabs, collapses around the active member, and cancels a rename', async ({
+    orcaPage
+  }) => {
+    const pane = await prepareTerminalPane(orcaPage)
+    const { clusterId, members, outside } = await createNamedClusterFromMenu(
+      orcaPage,
+      pane,
+      'Build terminals'
+    )
+    const chip = clusterChip(orcaPage, pane.groupId, clusterId)
+    const [activeMember, hiddenMember] = members
+    if (!activeMember || !hiddenMember) {
+      throw new Error('The group must contain two tabs')
+    }
+    await terminalTab(orcaPage, pane.groupId, activeMember).click()
+    await chip.click()
+    await expect
+      .poll(() => readCluster(orcaPage, pane, clusterId))
+      .toMatchObject({ collapsed: true })
+    await expect(chip).toHaveAttribute('aria-expanded', 'false')
+    await expect(chip).toContainText('2')
+    await expect(terminalTab(orcaPage, pane.groupId, activeMember)).toHaveAttribute(
+      'data-active',
+      'true'
+    )
+    await expect(terminalTab(orcaPage, pane.groupId, activeMember)).toBeVisible()
+    await expect(terminalTab(orcaPage, pane.groupId, hiddenMember)).toBeHidden()
+    await expect(terminalTab(orcaPage, pane.groupId, outside)).toBeVisible()
+
+    await terminalTab(orcaPage, pane.groupId, outside).click()
+    for (const tab of members) {
+      await expect(terminalTab(orcaPage, pane.groupId, tab)).toBeHidden()
+    }
+    await expect(chip).toHaveAttribute('aria-expanded', 'false')
+    await chip.click()
+    await expect
+      .poll(() => readCluster(orcaPage, pane, clusterId))
+      .toMatchObject({ collapsed: false })
+    await expect(chip).toHaveAttribute('aria-expanded', 'true')
+    for (const tab of members) {
+      await expect(terminalTab(orcaPage, pane.groupId, tab)).toBeVisible()
+    }
+
+    await chip.dblclick()
+    const renameInput = chip.getByRole('textbox', { name: 'Rename Group', exact: true })
+    await expect(renameInput).toBeFocused()
+    await expect(renameInput).toHaveValue('Build terminals')
+    await renameInput.fill('Discard this name')
+    await renameInput.press('Escape')
+    await expect(renameInput).toBeHidden()
+    await expect
+      .poll(() => readCluster(orcaPage, pane, clusterId))
+      .toMatchObject({ name: 'Build terminals' })
+    await expect(chip).toHaveText('Build terminals')
+  })
+
+  test('ungroups without closing tabs, then closes every member of a regrouped cluster', async ({
+    orcaPage
+  }) => {
+    const pane = await prepareTerminalPane(orcaPage)
+    const firstCluster = await createNamedClusterFromMenu(orcaPage, pane, 'Keep these tabs')
+    const firstChip = clusterChip(orcaPage, pane.groupId, firstCluster.clusterId)
+    const groupedOrder = (await readPane(orcaPage, pane))?.tabOrder
+    await firstChip.click({ button: 'right' })
+    await orcaPage.getByRole('menuitem', { name: 'Ungroup', exact: true }).click()
+    await expect.poll(async () => (await readPane(orcaPage, pane))?.tabClusters ?? []).toEqual([])
+    await expect.poll(async () => (await readPane(orcaPage, pane))?.tabOrder).toEqual(groupedOrder)
+    await expect
+      .poll(async () =>
+        (await getWorktreeTabs(orcaPage, pane.worktreeId)).map((tab) => tab.id).sort()
+      )
+      .toEqual(pane.tabs.map((tab) => tab.entityId).sort())
+    await expect(firstChip).toBeHidden()
+    for (const tab of pane.tabs) {
+      await expect(terminalTab(orcaPage, pane.groupId, tab)).toBeVisible()
+    }
+
+    const regrouped = await createNamedClusterFromMenu(orcaPage, pane, 'Close these tabs')
+    const chip = clusterChip(orcaPage, pane.groupId, regrouped.clusterId)
+    await chip.click({ button: 'right' })
+    await orcaPage.getByRole('menuitem', { name: 'Close Group', exact: true }).click()
+    const confirmation = orcaPage.getByRole('dialog', { name: 'Stop running command?' })
+    for (const member of regrouped.members) {
+      const tab = terminalTab(orcaPage, pane.groupId, member)
+      // Why: a shell still starting can briefly require confirmation even without a launched command.
+      await expect
+        .poll(async () => (await confirmation.isVisible()) || (await tab.count()) === 0)
+        .toBe(true)
+      if (await confirmation.isVisible()) {
+        await confirmation.getByRole('button', { name: 'Stop and Close', exact: true }).click()
+      }
+      await expect(tab).toBeHidden()
+    }
+    await expect
+      .poll(async () => (await getWorktreeTabs(orcaPage, pane.worktreeId)).map((tab) => tab.id))
+      .toEqual([regrouped.outside.entityId])
+    await expect.poll(async () => (await readPane(orcaPage, pane))?.tabClusters ?? []).toEqual([])
+    await expect(chip).toBeHidden()
+    await expect(terminalTab(orcaPage, pane.groupId, regrouped.outside)).toBeVisible()
+  })
+
+  test('restores a named collapsed cluster after an app restart', async ({
+    testRepoPath
+  }, testInfo) => {
+    test.setTimeout(300_000)
+    const session = createRestartSession(testInfo)
+    let firstApp: ElectronApplication | null = null
+    let secondApp: ElectronApplication | null = null
+    try {
+      const first = await session.launch()
+      firstApp = first.app
+      await waitForSessionReady(first.page)
+      await waitForStartupWorktreeRefresh(first.page)
+      await attachRepoAndOpenTerminal(first.page, testRepoPath)
+      const pane = await prepareTerminalPane(first.page)
+      const { clusterId, memberIds } = await createNamedClusterFromMenu(
+        first.page,
+        pane,
+        'Saved group'
+      )
+      await clusterChip(first.page, pane.groupId, clusterId).click()
+      await expect
+        .poll(() => readCluster(first.page, pane, clusterId))
+        .toMatchObject({ name: 'Saved group', collapsed: true })
+      await expect(clusterChip(first.page, pane.groupId, clusterId)).toHaveAttribute(
+        'aria-expanded',
+        'false'
+      )
+      await session.close(firstApp)
+      firstApp = null
+
+      const second = await session.launch()
+      secondApp = second.app
+      await waitForSessionReady(second.page)
+      await waitForStartupWorktreeRefresh(second.page)
+      await expect.poll(() => getActiveWorktreeId(second.page)).toBe(pane.worktreeId)
+      await expect
+        .poll(() => readCluster(second.page, pane, clusterId))
+        .toMatchObject({ name: 'Saved group', collapsed: true, tabIds: memberIds })
+      const restoredPane = await readPane(second.page, pane)
+      for (const tab of pane.tabs.filter((candidate) => memberIds.includes(candidate.id))) {
+        const memberTab = terminalTab(second.page, pane.groupId, tab)
+        await (tab.id === restoredPane?.activeTabId
+          ? expect(memberTab).toBeVisible()
+          : expect(memberTab).toBeHidden())
+      }
+      const restoredChip = clusterChip(second.page, pane.groupId, clusterId)
+      await expect(restoredChip).toBeVisible()
+      await expect(restoredChip).toContainText('Saved group')
+      await expect(restoredChip).toHaveAttribute('aria-expanded', 'false')
+    } finally {
+      try {
+        if (secondApp) {
+          await session.close(secondApp)
+        }
+      } finally {
+        try {
+          if (firstApp) {
+            await session.close(firstApp)
+          }
+        } finally {
+          await session.dispose()
+        }
+      }
+    }
+  })
+
+  test('preserves the cluster when moving to a new split and merging back', async ({
+    orcaPage
+  }) => {
+    const pane = await prepareTerminalPane(orcaPage)
+    const { clusterId, memberIds, members, outside } = await createNamedClusterFromMenu(
+      orcaPage,
+      pane,
+      'Split group'
+    )
+    const originalCluster = await readCluster(orcaPage, pane, clusterId)
+    if (!originalCluster) {
+      throw new Error('The group was not created')
+    }
+    await clusterChip(orcaPage, pane.groupId, clusterId).click({ button: 'right' })
+    await orcaPage.getByRole('menuitem', { name: 'Move Group to New Split', exact: true }).hover()
+    await orcaPage.getByRole('menuitem', { name: 'Right', exact: true }).click()
+    await expect.poll(() => readPanes(orcaPage, pane.worktreeId)).toHaveLength(2)
+    await expect
+      .poll(async () => {
+        const groups = await readPanes(orcaPage, pane.worktreeId)
+        const destination = groups.find((group) => group.id !== pane.groupId)
+        return { tabOrder: destination?.tabOrder, clusters: destination?.tabClusters }
+      })
+      .toEqual({ tabOrder: memberIds, clusters: [originalCluster] })
+    const newPane = (await readPanes(orcaPage, pane.worktreeId)).find(
+      (group) => group.id !== pane.groupId
+    )
+    if (!newPane) {
+      throw new Error('Moving the group did not create a new pane')
+    }
+    await expect.poll(async () => (await readPane(orcaPage, pane))?.tabOrder).toEqual([outside.id])
+    await expect(clusterChip(orcaPage, pane.groupId, clusterId)).toBeHidden()
+    await expect(terminalTab(orcaPage, pane.groupId, outside)).toBeVisible()
+    await expect(clusterChip(orcaPage, newPane.id, clusterId)).toHaveText('Split group')
+    for (const member of members) {
+      await expect(terminalTab(orcaPage, newPane.id, member)).toBeVisible()
+      await expect(terminalTab(orcaPage, pane.groupId, member)).toBeHidden()
+    }
+
+    const mergedGroupId = await orcaPage.evaluate(
+      ({ worktreeId, groupId }) =>
+        window.__store?.getState().mergeGroupIntoSibling(worktreeId, groupId),
+      { worktreeId: pane.worktreeId, groupId: newPane.id }
+    )
+    if (!mergedGroupId) {
+      throw new Error('The split pane did not merge into its sibling')
+    }
+    await expect
+      .poll(async () => {
+        const groups = await readPanes(orcaPage, pane.worktreeId)
+        return groups.map((group) => ({ id: group.id, clusters: group.tabClusters }))
+      })
+      .toEqual([{ id: mergedGroupId, clusters: [originalCluster] }])
+    await expect(paneStrip(orcaPage, newPane.id)).toBeHidden()
+    for (const tab of pane.tabs) {
+      await expect(terminalTab(orcaPage, mergedGroupId, tab)).toBeVisible()
+    }
+    await expect(clusterChip(orcaPage, mergedGroupId, clusterId)).toHaveText('Split group')
+  })
+})

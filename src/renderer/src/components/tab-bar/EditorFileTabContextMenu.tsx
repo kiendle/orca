@@ -27,6 +27,7 @@ import { shouldBlockEditorTabLocalOpen } from './editor-tab-local-open-guard'
 import { translate } from '@/i18n/i18n'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
+import { TabClusterMenuSection } from './TabClusterMenuSection'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -165,6 +166,14 @@ export function EditorFileTabContextMenu({
             ? translate('auto.components.tab.bar.EditorFileTabContextMenu.8e9d603a09', 'Unpin Tab')
             : translate('auto.components.tab.bar.EditorFileTabContextMenu.fdd29eb669', 'Pin Tab')}
         </DropdownMenuItem>
+        {open ? (
+          <TabClusterMenuSection
+            worktreeId={file.worktreeId}
+            groupId={groupId}
+            tabId={unifiedTabId}
+            isPinned={isPinned}
+          />
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
           <X className="size-3.5" />

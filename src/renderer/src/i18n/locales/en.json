@@ -18332,6 +18332,35 @@
     },
     "agentChildRow": {
       "ended": "Ended"
+    },
+    "tabCluster": {
+      "unnamed": "Unnamed group",
+      "rename": "Rename Group",
+      "color": "Group Color",
+      "expand": "Expand Group",
+      "collapse": "Collapse Group",
+      "moveToSplit": "Move Group to New Split",
+      "splitRight": "Right",
+      "splitLeft": "Left",
+      "splitDown": "Down",
+      "splitUp": "Up",
+      "ungroup": "Ungroup",
+      "close": "Close Group",
+      "addNewMany": "Add {{count}} Tabs to New Group",
+      "addNew": "Add Tab to New Group",
+      "addToExisting": "Add to Group",
+      "remove": "Remove from Group",
+      "colors": {
+        "grey": "Grey",
+        "blue": "Blue",
+        "red": "Red",
+        "yellow": "Yellow",
+        "green": "Green",
+        "pink": "Pink",
+        "purple": "Purple",
+        "cyan": "Cyan",
+        "orange": "Orange"
+      }
     }
   },
   "dashboardPopout": {

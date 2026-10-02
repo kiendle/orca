@@ -1,0 +1,41 @@
+import type { TabCluster, TabGroup } from '../../../../shared/tab-types'
+import { getHiddenClusterTabIds } from '@/store/slices/tabs/tab-cluster-model'
+import { getTabClusterSortableId } from '../tab-group/tab-drag-data'
+import type { TabBarItem } from './tab-bar-item-model'
+
+export type TabBarStripItem =
+  | TabBarItem
+  | {
+      type: 'cluster'
+      id: string
+      data: TabCluster
+    }
+
+export function buildTabBarStripItems(
+  items: readonly TabBarItem[],
+  group: Pick<TabGroup, 'tabClusters' | 'activeTabId'> | null
+): TabBarStripItem[] {
+  if (!group?.tabClusters?.length) {
+    return [...items]
+  }
+  const clusterByTabId = new Map<string, TabCluster>()
+  for (const cluster of group.tabClusters) {
+    for (const tabId of cluster.tabIds) {
+      clusterByTabId.set(tabId, cluster)
+    }
+  }
+  const hiddenTabIds = getHiddenClusterTabIds(group)
+  const renderedClusterIds = new Set<string>()
+  const stripItems: TabBarStripItem[] = []
+  for (const item of items) {
+    const cluster = clusterByTabId.get(item.unifiedTabId)
+    if (cluster && !renderedClusterIds.has(cluster.id)) {
+      stripItems.push({ type: 'cluster', id: getTabClusterSortableId(cluster.id), data: cluster })
+      renderedClusterIds.add(cluster.id)
+    }
+    if (!hiddenTabIds.has(item.unifiedTabId)) {
+      stripItems.push(item)
+    }
+  }
+  return stripItems
+}
