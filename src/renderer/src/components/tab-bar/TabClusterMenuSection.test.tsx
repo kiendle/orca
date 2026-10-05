@@ -16,7 +16,7 @@ import {
 } from '@/store/slices/store-test-helpers'
 import type { TabCluster, TabGroup } from '../../../../shared/tab-types'
 import { TabClusterMenuSection } from './TabClusterMenuSection'
-import { getTabClusterMenuTargets } from './tab-cluster-menu-targets'
+import { getTabClusterMenuTargets } from './tab-strip-selection'
 
 let store: TestStore
 

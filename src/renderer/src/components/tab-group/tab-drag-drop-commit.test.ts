@@ -2,7 +2,9 @@
 import type { DragEndEvent } from '@dnd-kit/core'
 import type { StoreApi, UseBoundStore } from 'zustand'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TabCluster, TabGroup } from '../../../../shared/tab-types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import type { TabCluster } from '../../../../shared/tab-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'
 import {
@@ -92,66 +94,65 @@ function event(
   }
 }
 
-function commit(dragEvent: DragEndEvent, geometry: TabGroupPanelGeometrySnapshot | null = null) {
+function commit(
+  dragEvent: DragEndEvent,
+  geometry: TabGroupPanelGeometrySnapshot | null = null,
+  worktreeId = WT
+) {
+  const state = store.getState()
+  const dropUnifiedTab = vi.spyOn(state, 'dropUnifiedTab')
+  const moveTabsInStrip = vi.spyOn(state, 'moveTabsInStrip')
+  const moveTabCluster = vi.spyOn(state, 'moveTabCluster')
   const finishDrag = vi.fn()
   commitTabDragDrop({
     event: dragEvent,
-    worktreeId: WT,
+    worktreeId,
     dragGeometryRef: { current: geometry },
-    dropUnifiedTab: store.getState().dropUnifiedTab,
-    moveTabsInStrip: store.getState().moveTabsInStrip,
-    moveTabCluster: store.getState().moveTabCluster,
+    dropUnifiedTab,
+    moveTabsInStrip,
+    moveTabCluster,
     finishDrag
   })
-  return finishDrag
+  return { dropUnifiedTab, moveTabsInStrip, moveTabCluster, finishDrag }
 }
 
-function group(id: string): TabGroup {
-  const result = store.getState().groupsByWorktree[WT].find((item) => item.id === id)
-  if (!result) {
-    throw new Error(`Missing test pane: ${id}`)
-  }
-  return result
-}
-
-function sourceGeometry(): TabGroupPanelGeometrySnapshot {
+function paneGeometry(groupId: string): TabGroupPanelGeometrySnapshot {
   const entry = {
-    groupId: 'source',
+    groupId,
     panelRect: new DOMRect(0, 0, 400, 600),
     bodyRect: new DOMRect(0, 32, 400, 568)
   }
-  return { entries: [entry], byGroupId: new Map([['source', entry]]) }
+  return { entries: [entry], byGroupId: new Map([[groupId, entry]]) }
 }
 
-beforeEach(() => {
-  store = createTestStore()
+function seedDragPanes(worktreeId: string): void {
   const groups = [
     makeTabGroup({
       id: 'source',
-      worktreeId: WT,
+      worktreeId,
       activeTabId: 's-tail',
       tabOrder: ['s-a', 's-b', 's-tail'],
       tabClusters: [SOURCE_CLUSTER]
     }),
     makeTabGroup({
       id: 'target',
-      worktreeId: WT,
+      worktreeId,
       activeTabId: 'right',
       tabOrder: ['left', 't-a', 't-b', 't-c', 'right'],
       tabClusters: [TARGET_CLUSTER]
     })
   ]
   seedStore(store, {
-    activeWorktreeId: WT,
-    activeGroupIdByWorktree: { [WT]: 'source' },
-    groupsByWorktree: { [WT]: groups },
+    activeWorktreeId: worktreeId,
+    activeGroupIdByWorktree: { [worktreeId]: 'source' },
+    groupsByWorktree: { [worktreeId]: groups },
     unifiedTabsByWorktree: {
-      [WT]: groups.flatMap((pane) =>
-        pane.tabOrder.map((id) => makeUnifiedTab({ id, worktreeId: WT, groupId: pane.id }))
+      [worktreeId]: groups.flatMap((pane) =>
+        pane.tabOrder.map((id) => makeUnifiedTab({ id, worktreeId, groupId: pane.id }))
       )
     },
     layoutByWorktree: {
-      [WT]: {
+      [worktreeId]: {
         type: 'split',
         direction: 'horizontal',
         first: { type: 'leaf', groupId: 'source' },
@@ -159,6 +160,11 @@ beforeEach(() => {
       }
     }
   })
+}
+
+beforeEach(() => {
+  store = createTestStore()
+  seedDragPanes(WT)
   vi.spyOn(useAppStore, 'getState').mockImplementation(store.getState)
 })
 
@@ -169,18 +175,41 @@ afterEach(() => {
 })
 
 describe('tab cluster drag commits', () => {
-  it('preserves tab-only reorder behavior without cluster metadata', () => {
-    store.getState().ungroupTabCluster('source', SOURCE_CLUSTER.id)
-    commit(event(tab('s-a'), tab('s-b'), 90))
-    expect(group('source').tabOrder).toEqual(['s-b', 's-a', 's-tail'])
-    expect(group('source').tabClusters).toBeUndefined()
+  it.each([
+    {
+      name: 'a same-pane interior tab drop',
+      activeDrag: tab('s-tail'),
+      overData: tab('s-b'),
+      x: 10,
+      movedTabIds: ['s-tail'],
+      tabOrder: ['s-a', 's-tail', 's-b']
+    },
+    {
+      name: 'a same-pane collapsed chip reorder',
+      activeDrag: chip(),
+      overData: tab('s-tail'),
+      x: 90,
+      movedTabIds: ['s-a', 's-b'],
+      tabOrder: ['s-tail', 's-a', 's-b']
+    }
+  ])('routes $name through strip movement and mirrors its order', (testCase) => {
+    const { moveTabsInStrip, dropUnifiedTab, moveTabCluster, finishDrag } = commit(
+      event(testCase.activeDrag, testCase.overData, testCase.x)
+    )
+    expect(moveTabsInStrip.mock.calls).toEqual([
+      ['source', testCase.movedTabIds, { index: 1, clusterId: SOURCE_CLUSTER.id }]
+    ])
+    expect(dropUnifiedTab).not.toHaveBeenCalled()
+    expect(moveTabCluster).not.toHaveBeenCalled()
+    expect(mirrorWebRuntimeTabMove).toHaveBeenCalledTimes(1)
     expect(mirrorWebRuntimeTabMove).toHaveBeenCalledWith({
       kind: 'reorder',
       worktreeId: WT,
-      tabId: 's-a',
+      tabId: testCase.movedTabIds[0],
       targetGroupId: 'source',
-      tabOrder: ['s-b', 's-a', 's-tail']
+      tabOrder: testCase.tabOrder
     })
+    expect(finishDrag.mock.calls).toEqual([[true]])
   })
 
   it('mirrors a mixed cluster reorder with a host-backed anchor instead of its local-only first member', () => {
@@ -194,7 +223,6 @@ describe('tab cluster drag commits', () => {
       'host-s-b'
     )
     commit(event(chip(), tab('s-tail'), 90))
-    expect(group('source').tabOrder).toEqual(['s-tail', 's-a', 's-b'])
     expect(mirrorWebRuntimeTabMove).toHaveBeenCalledTimes(1)
     expect(mirrorWebRuntimeTabMove).toHaveBeenCalledWith({
       kind: 'reorder',
@@ -205,126 +233,89 @@ describe('tab cluster drag commits', () => {
     })
   })
 
-  it('joins a same-pane interior insertion atomically and mirrors the flat order', () => {
-    commit(event(tab('s-tail'), tab('s-b')))
-    expect(group('source').tabOrder).toEqual(['s-a', 's-tail', 's-b'])
-    expect(group('source').tabClusters?.[0].tabIds).toEqual(['s-a', 's-tail', 's-b'])
-    expect(mirrorWebRuntimeTabMove).toHaveBeenCalledWith({
-      kind: 'reorder',
-      worktreeId: WT,
-      tabId: 's-tail',
-      targetGroupId: 'source',
-      tabOrder: ['s-a', 's-tail', 's-b']
-    })
-  })
-
-  it('keeps a cross-pane interior slot while transferring membership', () => {
-    const finishDrag = commit(event(tab('s-b'), tab('t-b', 'target')))
-    expect(group('source').tabClusters?.[0].tabIds).toEqual(['s-a'])
-    expect(group('target').tabOrder).toEqual(['left', 't-a', 's-b', 't-b', 't-c', 'right'])
-    expect(group('target').tabClusters?.[0].tabIds).toEqual(['t-a', 's-b', 't-b', 't-c'])
-    expect(finishDrag).toHaveBeenCalledWith(false, tab('s-b'))
-  })
-
-  it('appends over a collapsed chip rather than placing before its hidden members', () => {
-    store.getState().setTabClusterCollapsed('target', TARGET_CLUSTER.id, true)
-    commit(event(tab('s-tail'), chip('target', { ...TARGET_CLUSTER, collapsed: true })))
-    expect(group('target').tabOrder).toEqual(['left', 't-a', 't-b', 't-c', 's-tail', 'right'])
-    expect(group('target').tabClusters?.[0]).toMatchObject({
-      collapsed: true,
-      tabIds: ['t-a', 't-b', 't-c', 's-tail']
-    })
-  })
-
-  it('reorders all chip members, including hidden tabs, within their pane', () => {
-    commit(event(chip(), tab('s-tail'), 90))
-    expect(group('source').tabOrder).toEqual(['s-tail', 's-a', 's-b'])
-    expect(group('source').tabClusters?.[0]).toEqual(SOURCE_CLUSTER)
-    expect(mirrorWebRuntimeTabMove).toHaveBeenCalledTimes(1)
-    expect(mirrorWebRuntimeTabMove).toHaveBeenCalledWith({
-      kind: 'reorder',
-      worktreeId: WT,
-      tabId: 's-a',
-      targetGroupId: 'source',
-      tabOrder: ['s-tail', 's-a', 's-b']
-    })
-  })
-
-  it('moves a chip after another whole cluster without merging and mirrors each member', () => {
-    commit(event(chip(), tab('t-b', 'target'), 90))
-    expect(group('source').tabOrder).toEqual(['s-tail'])
-    expect(group('source').tabClusters).toBeUndefined()
-    expect(group('target').tabOrder).toEqual(['left', 't-a', 't-b', 't-c', 's-a', 's-b', 'right'])
-    expect(group('target').tabClusters).toEqual([TARGET_CLUSTER, SOURCE_CLUSTER])
-    expect(vi.mocked(mirrorWebRuntimeTabMove).mock.calls.map(([move]) => move)).toEqual([
-      { kind: 'move-to-group', worktreeId: WT, tabId: 's-a', targetGroupId: 'target', index: 4 },
-      { kind: 'move-to-group', worktreeId: WT, tabId: 's-b', targetGroupId: 'target', index: 5 }
+  it('routes a cross-pane interior tab drop with the resolved slot and membership', () => {
+    const { dropUnifiedTab, moveTabsInStrip, moveTabCluster, finishDrag } = commit(
+      event(tab('s-b'), tab('t-b', 'target'))
+    )
+    expect(dropUnifiedTab.mock.calls).toEqual([
+      ['s-b', { groupId: 'target', index: 2, clusterId: TARGET_CLUSTER.id }]
     ])
+    expect(moveTabsInStrip).not.toHaveBeenCalled()
+    expect(moveTabCluster).not.toHaveBeenCalled()
+    expect(finishDrag.mock.calls).toEqual([[false, tab('s-b')]])
   })
 
-  it.each(['chip', 'member'] as const)(
-    'moves an equal-id cluster across panes via its %s without merging the records',
-    (hoveredKind) => {
-      const sourceCluster = { ...SOURCE_CLUSTER, id: 'same', shownTabId: 's-a' }
-      const targetCluster = { ...TARGET_CLUSTER, id: 'same' }
-      store.setState({
-        groupsByWorktree: {
-          [WT]: [
-            { ...group('source'), tabClusters: [sourceCluster] },
-            { ...group('target'), tabClusters: [targetCluster] }
-          ]
-        }
-      })
-      const overData = hoveredKind === 'chip' ? chip('target', targetCluster) : tab('t-b', 'target')
-      commit(event(chip('source', sourceCluster), overData, 90))
-      expect(group('source').tabOrder).toEqual(['s-tail'])
-      expect(group('source').tabClusters).toBeUndefined()
-      expect(group('target').tabOrder).toEqual(['left', 't-a', 't-b', 't-c', 's-a', 's-b', 'right'])
-      expect(group('target').tabClusters?.find((cluster) => cluster.id === 'same')).toEqual(
-        targetCluster
-      )
-      const movedCluster = group('target').tabClusters?.find((cluster) =>
-        cluster.tabIds.includes('s-a')
-      )
-      expect(movedCluster).toMatchObject({
-        name: 'Source',
-        color: 'blue',
-        collapsed: true,
-        shownTabId: 's-a',
-        tabIds: ['s-a', 's-b']
-      })
-      expect(movedCluster?.id).not.toBe('same')
+  it.each([
+    {
+      name: 'a cross-pane strip',
+      overData: tab('t-b', 'target'),
+      target: { groupId: 'target', index: 4 },
+      index: 4
+    },
+    {
+      name: 'another pane body',
+      overData: { kind: 'pane-body', worktreeId: WT, groupId: 'target' },
+      target: { groupId: 'target' },
+      index: 5
     }
-  )
-
-  it('moves a chip to a pane body with its metadata intact', () => {
-    commit(event(chip(), { kind: 'pane-body', worktreeId: WT, groupId: 'target' }))
-    expect(group('target').tabOrder).toEqual(['left', 't-a', 't-b', 't-c', 'right', 's-a', 's-b'])
-    expect(group('target').tabClusters).toEqual([TARGET_CLUSTER, SOURCE_CLUSTER])
+  ] satisfies {
+    name: string
+    overData: TabStripDragItemData | TabPaneDropData
+    target: Parameters<AppState['moveTabCluster']>[2]
+    index: number
+  }[])('routes a chip to $name and mirrors every member', ({ overData, target, index }) => {
+    const { moveTabCluster, dropUnifiedTab, moveTabsInStrip, finishDrag } = commit(
+      event(chip(), overData, 90)
+    )
+    expect(moveTabCluster.mock.calls).toEqual([['source', SOURCE_CLUSTER.id, target]])
+    expect(dropUnifiedTab).not.toHaveBeenCalled()
+    expect(moveTabsInStrip).not.toHaveBeenCalled()
+    expect(vi.mocked(mirrorWebRuntimeTabMove).mock.calls.map(([move]) => move)).toEqual(
+      SOURCE_CLUSTER.tabIds.map((tabId, offset) => ({
+        kind: 'move-to-group',
+        worktreeId: WT,
+        tabId,
+        targetGroupId: 'target',
+        index: index + offset
+      }))
+    )
+    expect(finishDrag.mock.calls).toEqual([[false, chip()]])
   })
 
-  it('moves a local chip into a new edge split with all hidden members', () => {
-    commit(
+  it('routes a local chip edge drop to a split instead of a pane-body move', () => {
+    const { moveTabCluster, dropUnifiedTab, moveTabsInStrip, finishDrag } = commit(
       event(chip(), { kind: 'pane-body', worktreeId: WT, groupId: 'source' }, 398, 300),
-      sourceGeometry()
+      paneGeometry('source')
     )
-    expect(group('source').tabOrder).toEqual(['s-tail'])
-    const splitPane = store
-      .getState()
-      .groupsByWorktree[WT].find((pane) => pane.id !== 'source' && pane.id !== 'target')
-    expect(splitPane?.tabOrder).toEqual(['s-a', 's-b'])
-    expect(splitPane?.tabClusters).toEqual([SOURCE_CLUSTER])
+    expect(moveTabCluster.mock.calls).toEqual([
+      ['source', SOURCE_CLUSTER.id, { groupId: 'source', splitDirection: 'right' }]
+    ])
+    expect(dropUnifiedTab).not.toHaveBeenCalled()
+    expect(moveTabsInStrip).not.toHaveBeenCalled()
+    expect(mirrorWebRuntimeTabMove).not.toHaveBeenCalled()
+    expect(finishDrag.mock.calls).toEqual([[false, undefined]])
   })
 
-  it('cancels mirrored chip edge splits without falling through to a body move', () => {
-    store.setState({ activeWorkspaceExecutionHostId: 'runtime:remote' })
-    const before = store.getState().groupsByWorktree[WT]
-    const finishDrag = commit(
-      event(chip(), { kind: 'pane-body', worktreeId: WT, groupId: 'source' }, 398, 300),
-      sourceGeometry()
+  it.each<{ name: string; worktreeId: string; executionHostId: ExecutionHostId }>([
+    { name: 'remote', worktreeId: WT, executionHostId: 'runtime:remote' },
+    { name: 'floating', worktreeId: FLOATING_TERMINAL_WORKTREE_ID, executionHostId: 'local' }
+  ])('cancels $name chip splits without falling through to a body move', (testCase) => {
+    seedDragPanes(testCase.worktreeId)
+    store.setState({ activeWorkspaceExecutionHostId: testCase.executionHostId })
+    const { moveTabCluster, dropUnifiedTab, moveTabsInStrip, finishDrag } = commit(
+      event(
+        { ...chip(), worktreeId: testCase.worktreeId },
+        { kind: 'pane-body', worktreeId: testCase.worktreeId, groupId: 'target' },
+        398,
+        300
+      ),
+      paneGeometry('target'),
+      testCase.worktreeId
     )
-    expect(store.getState().groupsByWorktree[WT]).toBe(before)
-    expect(finishDrag).toHaveBeenCalledWith(true)
+    expect(moveTabCluster).not.toHaveBeenCalled()
+    expect(dropUnifiedTab).not.toHaveBeenCalled()
+    expect(moveTabsInStrip).not.toHaveBeenCalled()
+    expect(finishDrag.mock.calls).toEqual([[true]])
     expect(mirrorWebRuntimeTabMove).not.toHaveBeenCalled()
   })
 })

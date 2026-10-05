@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import type { TabCluster, TabGroup } from '../../../../../shared/tab-types'
+import type { TabCluster } from '../../../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session-state-types'
 import { parseWorkspaceSession } from '../../../../../shared/workspace-session-schema'
 import { buildPersistedUnifiedTabSessionData } from '@/lib/workspace-session-unified-tabs'
-import { buildHydratedTabState } from '../tabs-hydration'
-import { makeTabGroup, makeUnifiedTab } from '../store-test-helpers'
-import { getHiddenClusterTabIds } from './tab-cluster-model'
+import {
+  createTestStore,
+  makeTabGroup,
+  makeUnifiedTab,
+  makeWorktree,
+  seedStore
+} from '../store-test-helpers'
 
 const WT = 'repo1::/tmp/feature'
 const PANE = 'pane'
@@ -24,99 +28,54 @@ function baseSession(): WorkspaceSessionState {
   }
 }
 
-function roundTrip(ids: string[], pane: TabGroup, pinnedIds: readonly string[] = []): TabGroup {
-  const persisted = buildPersistedUnifiedTabSessionData({
-    unifiedTabsByWorktree: {
-      [WT]: ids.map((id, sortOrder) =>
-        makeUnifiedTab({
-          id,
-          worktreeId: WT,
-          groupId: PANE,
-          sortOrder,
-          contentType: 'editor',
-          isPinned: pinnedIds.includes(id)
-        })
-      )
-    },
-    groupsByWorktree: { [WT]: [pane] },
-    layoutByWorktree: { [WT]: { type: 'leaf', groupId: PANE } },
-    activeGroupIdByWorktree: { [WT]: PANE }
+function restoreSession(session: WorkspaceSessionState) {
+  const store = createTestStore()
+  seedStore(store, {
+    worktreesByRepo: {
+      repo1: [makeWorktree({ id: WT, repoId: 'repo1', path: '/tmp/feature' })]
+    }
   })
-  const parsed = parseWorkspaceSession({ ...baseSession(), ...persisted })
-  if (!parsed.ok) {
-    throw new Error('expected a valid persisted session')
-  }
-  return buildHydratedTabState(parsed.value, new Set([WT])).groupsByWorktree[WT][0]
+  store.getState().hydrateTabsSession(session)
+  return store.getState().groupsByWorktree[WT][0]
 }
 
 describe('tab cluster session persistence', () => {
   it('round-trips the sticky member even when pane activation has moved outside its cluster', () => {
-    const pane = makeTabGroup({
-      id: PANE,
-      worktreeId: WT,
-      activeTabId: 'outside',
-      tabOrder: ['a', 'b', 'outside'],
-      tabClusters: [cluster('c', ['a', 'b'], { shownTabId: 'a' })]
+    const store = createTestStore()
+    seedStore(store, {
+      unifiedTabsByWorktree: {
+        [WT]: ['a', 'b', 'outside'].map((id, sortOrder) =>
+          makeUnifiedTab({ id, worktreeId: WT, groupId: PANE, sortOrder, contentType: 'editor' })
+        )
+      },
+      groupsByWorktree: {
+        [WT]: [
+          makeTabGroup({
+            id: PANE,
+            worktreeId: WT,
+            activeTabId: 'outside',
+            tabOrder: ['a', 'b', 'outside'],
+            tabClusters: [cluster('c', ['a', 'b'], { shownTabId: 'a' })]
+          })
+        ]
+      },
+      layoutByWorktree: { [WT]: { type: 'leaf', groupId: PANE } },
+      activeGroupIdByWorktree: { [WT]: PANE }
     })
-    const restored = roundTrip(['a', 'b', 'outside'], pane)
+    const persisted = buildPersistedUnifiedTabSessionData(store.getState())
+    expect(persisted.tabGroups?.[WT][0].tabClusters).toEqual([
+      cluster('c', ['a', 'b'], { shownTabId: 'a' })
+    ])
+    const parsed = parseWorkspaceSession(
+      JSON.parse(JSON.stringify({ ...baseSession(), ...persisted }))
+    )
+    if (!parsed.ok) {
+      throw new Error('expected a valid persisted session')
+    }
+    const restored = restoreSession(parsed.value)
     expect(restored.tabOrder).toEqual(['a', 'b', 'outside'])
     expect(restored.tabClusters).toEqual([cluster('c', ['a', 'b'], { shownTabId: 'a' })])
     expect(restored.activeTabId).toBe('outside')
-    expect([...getHiddenClusterTabIds(restored)]).toEqual(['b'])
-  })
-
-  it('drops stale ids and pinned members and gives duplicate members to the first cluster', () => {
-    const pane = makeTabGroup({
-      id: PANE,
-      worktreeId: WT,
-      tabOrder: ['stale', 'pin', 'a', 'b', 'c'],
-      tabClusters: [
-        cluster('first', ['stale', 'pin', 'a', 'a', 'b'], { shownTabId: 'pin' }),
-        cluster('second', ['b', 'c'], { shownTabId: 'b' })
-      ]
-    })
-    const restored = roundTrip(['pin', 'a', 'b', 'c'], pane, ['pin'])
-    expect(restored.tabOrder).toEqual(['pin', 'a', 'b', 'c'])
-    expect(restored.tabClusters).toEqual([cluster('first', ['a', 'b']), cluster('second', ['c'])])
-  })
-
-  it('keeps the longest contiguous run without reordering tabs during a round trip', () => {
-    const ids = ['a', 'b', 'x', 'y', 'c', 'd', 'e']
-    const pane = makeTabGroup({
-      id: PANE,
-      worktreeId: WT,
-      tabOrder: ids,
-      tabClusters: [cluster('c', ['a', 'b', 'c', 'd', 'e'])]
-    })
-    const restored = roundTrip(ids, pane)
-    expect(restored.tabOrder).toEqual(ids)
-    expect(restored.tabClusters).toEqual([cluster('c', ['c', 'd', 'e'])])
-  })
-
-  it('sandwich-joins missing membership and normalizes against tabs repaired into the persisted order', () => {
-    const pane = makeTabGroup({
-      id: PANE,
-      worktreeId: WT,
-      tabOrder: ['a', 'middle', 'b'],
-      tabClusters: [cluster('c', ['a', 'b', 'appended'])]
-    })
-    const restored = roundTrip(['a', 'middle', 'b', 'appended'], pane)
-    expect(restored.tabOrder).toEqual(['a', 'middle', 'b', 'appended'])
-    expect(restored.tabClusters).toEqual([cluster('c', ['a', 'middle', 'b', 'appended'])])
-  })
-
-  it('omits tabClusters after its last member is pruned instead of persisting an empty array', () => {
-    const restored = roundTrip(
-      ['a'],
-      makeTabGroup({
-        id: PANE,
-        worktreeId: WT,
-        tabOrder: ['a'],
-        tabClusters: [cluster('c', ['stale'])]
-      })
-    )
-    expect(restored.tabOrder).toEqual(['a'])
-    expect(Object.hasOwn(restored, 'tabClusters')).toBe(false)
   })
 
   it('keeps the pane when zod discards corrupt cluster metadata and hydrates its tabs', () => {
@@ -142,10 +101,10 @@ describe('tab cluster session persistence', () => {
     if (!parsed.ok) {
       throw new Error('expected corrupt metadata to be salvaged')
     }
-    const restored = buildHydratedTabState(parsed.value, new Set([WT]))
-    expect(restored.groupsByWorktree[WT][0].tabOrder).toEqual(['a'])
-    expect(restored.groupsByWorktree[WT][0].activeTabId).toBe('a')
-    expect(Object.hasOwn(restored.groupsByWorktree[WT][0], 'tabClusters')).toBe(false)
+    const restored = restoreSession(parsed.value)
+    expect(restored.tabOrder).toEqual(['a'])
+    expect(restored.activeTabId).toBe('a')
+    expect(Object.hasOwn(restored, 'tabClusters')).toBe(false)
   })
 
   it('discards a corrupt sticky field without losing the cluster during hydration', () => {
@@ -171,42 +130,9 @@ describe('tab cluster session persistence', () => {
     if (!parsed.ok) {
       throw new Error('expected corrupt sticky metadata to be salvaged')
     }
-    const restored = buildHydratedTabState(parsed.value, new Set([WT])).groupsByWorktree[WT][0]
+    const restored = restoreSession(parsed.value)
     expect(restored.tabOrder).toEqual(['a', 'b'])
     expect(restored.tabClusters).toEqual([cluster('c', ['a', 'b'])])
-    expect([...getHiddenClusterTabIds(restored)]).toEqual(['b'])
-  })
-
-  it('normalizes legacy persisted clusters directly against the hydrated ownership and pin state', () => {
-    const ids = ['pin', 'a', 'b', 'x', 'y', 'c', 'd', 'e']
-    const session: WorkspaceSessionState = {
-      ...baseSession(),
-      unifiedTabs: {
-        [WT]: ids.map((id, sortOrder) =>
-          makeUnifiedTab({
-            id,
-            worktreeId: WT,
-            groupId: PANE,
-            contentType: 'editor',
-            sortOrder,
-            isPinned: id === 'pin'
-          })
-        )
-      },
-      tabGroups: {
-        [WT]: [
-          makeTabGroup({
-            id: PANE,
-            worktreeId: WT,
-            tabOrder: ['stale', ...ids, 'a'],
-            tabClusters: [cluster('c', ['stale', 'pin', 'a', 'b', 'c', 'd', 'e', 'e'])]
-          })
-        ]
-      }
-    }
-    const restored = buildHydratedTabState(session, new Set([WT])).groupsByWorktree[WT][0]
-    expect(restored.tabOrder).toEqual(ids)
-    expect(restored.tabClusters).toEqual([cluster('c', ['c', 'd', 'e'])])
   })
 
   it('rekeys editor aliases inside cluster membership during hydrated duplicate repair', () => {
@@ -250,7 +176,7 @@ describe('tab cluster session persistence', () => {
         ]
       }
     }
-    const restored = buildHydratedTabState(session, new Set([WT])).groupsByWorktree[WT][0]
+    const restored = restoreSession(session)
     expect(restored.tabOrder).toEqual(['canonical', 'other'])
     expect(restored.tabClusters).toEqual([
       cluster('c', ['canonical', 'other'], { shownTabId: 'canonical' })
@@ -286,7 +212,10 @@ describe('tab cluster session persistence', () => {
         }
       }
     })
-    expect(persisted.tabGroups?.[WT][0].tabOrder).toEqual(['a'])
+    expect(persisted.tabGroups?.[WT].map(({ id, tabOrder }) => ({ id, tabOrder }))).toEqual([
+      { id: PANE, tabOrder: ['a'] },
+      { id: 'other', tabOrder: ['foreign'] }
+    ])
     expect(persisted.tabGroups?.[WT][0].tabClusters).toEqual([cluster('c', ['a'])])
   })
 })

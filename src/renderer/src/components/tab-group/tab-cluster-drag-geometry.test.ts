@@ -139,66 +139,53 @@ describe('cluster pane edge geometry', () => {
 })
 
 describe('cluster strip insertion indicators', () => {
-  it('marks the outside of a chip at a nonmember left boundary', () => {
+  it.each([
+    {
+      name: 'a nonmember outside its chip',
+      activeDrag: tab('incoming', 'other-pane'),
+      visibleTabId: getTabClusterSortableId(GROUP.id, CLUSTER.id)
+    },
+    { name: 'a member inside its chip', activeDrag: tab('c'), visibleTabId: 'a' }
+  ])('marks the left boundary for $name', ({ activeDrag, visibleTabId }) => {
     expect(
       resolveTabInsertion(
-        dragEvent(tab('incoming', 'other-pane'), tab('a')),
+        dragEvent(activeDrag, tab('a')),
         isTabDragData,
         () => ({ x: 10, y: 10 }),
         GROUP
       )
-    ).toEqual({
-      groupId: GROUP.id,
-      visibleTabId: getTabClusterSortableId(GROUP.id, CLUSTER.id),
-      side: 'left'
-    })
+    ).toEqual({ groupId: GROUP.id, visibleTabId, side: 'left' })
   })
 
-  it('keeps a member boundary indicator inside its own chip', () => {
-    expect(
-      resolveTabInsertion(
-        dragEvent(tab('c'), tab('a')),
-        isTabDragData,
-        () => ({ x: 10, y: 10 }),
-        GROUP
-      )
-    ).toEqual({ groupId: GROUP.id, visibleTabId: 'a', side: 'left' })
-  })
-
-  it.each([false, true])(
-    'appends over a chip with collapsed=%s at its last visible edge',
-    (collapsed) => {
-      const target = { ...GROUP, tabClusters: [{ ...CLUSTER, collapsed }] }
-      expect(
-        resolveTabInsertion(
-          dragEvent(tab('incoming', 'other-pane'), { ...CHIP, collapsed }),
-          isTabDragData,
-          () => ({ x: 10, y: 10 }),
-          target
-        )
-      ).toEqual({ groupId: GROUP.id, visibleTabId: collapsed ? 'b' : 'c', side: 'right' })
+  it.each([
+    { name: 'an expanded chip', collapsed: false, activeTabId: 'b', visibleTabId: 'c' },
+    {
+      name: 'a collapsed chip with an active member',
+      collapsed: true,
+      activeTabId: 'b',
+      visibleTabId: 'b'
+    },
+    {
+      name: 'a collapsed chip without an active member',
+      collapsed: true,
+      activeTabId: 'tail',
+      visibleTabId: getTabClusterSortableId(GROUP.id, CLUSTER.id)
     }
-  )
-
-  it('uses the collapsed chip edge when none of its members are active', () => {
+  ])('marks the append edge for $name', ({ collapsed, activeTabId, visibleTabId }) => {
     const target = {
       ...GROUP,
-      activeTabId: 'tail',
+      activeTabId,
       tabOrder: [...GROUP.tabOrder, 'tail'],
-      tabClusters: [{ ...CLUSTER, collapsed: true }]
+      tabClusters: [{ ...CLUSTER, collapsed }]
     }
     expect(
       resolveTabInsertion(
-        dragEvent(tab('incoming', 'other-pane'), { ...CHIP, collapsed: true }),
+        dragEvent(tab('incoming', 'other-pane'), { ...CHIP, collapsed }),
         isTabDragData,
         () => ({ x: 10, y: 10 }),
         target
       )
-    ).toEqual({
-      groupId: GROUP.id,
-      visibleTabId: getTabClusterSortableId(GROUP.id, CLUSTER.id),
-      side: 'right'
-    })
+    ).toEqual({ groupId: GROUP.id, visibleTabId, side: 'right' })
   })
 
   it.each(['left', 'right'] as const)(
@@ -247,15 +234,12 @@ describe('cluster strip insertion indicators', () => {
     }
   )
 
-  it('suppresses a chip insertion indicator over its own chip', () => {
+  it.each([
+    { name: 'chip', overData: CHIP, x: 10 },
+    { name: 'member', overData: tab('b'), x: 90 }
+  ])('suppresses a chip insertion indicator over its own $name', ({ overData, x }) => {
     expect(
-      resolveTabInsertion(dragEvent(CHIP, CHIP), isTabDragData, () => ({ x: 10, y: 10 }))
-    ).toBeNull()
-  })
-
-  it('suppresses a chip insertion indicator over one of its own members', () => {
-    expect(
-      resolveTabInsertion(dragEvent(CHIP, tab('b')), isTabDragData, () => ({ x: 90, y: 10 }), GROUP)
+      resolveTabInsertion(dragEvent(CHIP, overData), isTabDragData, () => ({ x, y: 10 }), GROUP)
     ).toBeNull()
   })
 })

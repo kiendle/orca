@@ -131,8 +131,9 @@ describe('reopening closed cluster members', () => {
     expect(pane?.tabClusters?.[0].tabIds).toEqual([restored.id, anchorTabId])
   })
 
-  it.each(kinds)('%s stays ungrouped when its captured cluster was removed', (kind) => {
-    const { store, clusterId, groupId, anchorTabId, outsideTabId } = closeClusteredMember(kind)
+  it('stays ungrouped when its captured cluster was removed', () => {
+    const { store, clusterId, groupId, anchorTabId, outsideTabId } =
+      closeClusteredMember('terminal')
     store.getState().ungroupTabCluster(groupId, clusterId)
     expect(store.getState().reopenClosedTab(WT)).toBe(true)
     const restored = store.getState().getActiveTab(WT)

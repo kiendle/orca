@@ -91,99 +91,94 @@ describe('tab cluster drop targets', () => {
     }
   )
 
-  it.each([false, true])('appends a tab over a chip with collapsed=%s', (collapsed) => {
-    const targetGroup = { ...GROUP, tabClusters: [{ ...CLUSTER, collapsed }] }
-    expect(
-      resolveTabClusterDropTarget({
-        activeDrag: tab('incoming', 'another-pane'),
-        overData: { ...chip(), collapsed },
-        targetGroup,
-        side: 'left'
-      })
-    ).toEqual({ index: 4, clusterId: CLUSTER.id })
-  })
-
-  it('appends an existing member over its own chip without losing membership', () => {
-    expect(
-      resolveTabClusterDropTarget({
-        activeDrag: tab('a'),
-        overData: chip(),
-        targetGroup: GROUP,
-        side: 'left'
-      })
-    ).toEqual({ index: 3, clusterId: CLUSTER.id })
-  })
-
-  it.each(['left', 'right'] as const)('places a chip %s of another whole cluster', (side) => {
-    const sourceCluster = { ...CLUSTER, id: 'source-cluster', tabIds: ['one', 'two'] }
-    const targetGroup = {
-      ...GROUP,
-      tabOrder: ['one', 'two', ...GROUP.tabOrder],
-      tabClusters: [sourceCluster, CLUSTER]
+  it.each([
+    {
+      name: 'an incoming tab over an expanded chip',
+      activeDrag: tab('incoming', 'another-pane'),
+      collapsed: false,
+      index: 4
+    },
+    {
+      name: 'an incoming tab over a collapsed chip',
+      activeDrag: tab('incoming', 'another-pane'),
+      collapsed: true,
+      index: 4
+    },
+    {
+      name: 'an existing member over its own chip',
+      activeDrag: tab('a'),
+      collapsed: false,
+      index: 3
     }
+  ])('appends $name', ({ activeDrag, collapsed, index }) => {
     expect(
       resolveTabClusterDropTarget({
+        activeDrag,
+        overData: { ...chip(), collapsed },
+        targetGroup: { ...GROUP, tabClusters: [{ ...CLUSTER, collapsed }] },
+        side: 'left'
+      })
+    ).toEqual({ index, clusterId: CLUSTER.id })
+  })
+
+  describe.each(['left', 'right'] as const)('whole-chip drops on the %s', (side) => {
+    const sourceCluster = { ...CLUSTER, id: 'source-cluster', tabIds: ['one', 'two'] }
+    const equalIdGroup: TabGroup = {
+      ...GROUP,
+      id: 'destination',
+      tabClusters: [{ ...CLUSTER, id: 'same' }]
+    }
+    it.each([
+      {
+        name: 'a same-pane member',
         activeDrag: chip(sourceCluster.id),
         overData: tab('b'),
-        targetGroup,
-        side
-      })
-    ).toEqual({ index: side === 'left' ? 1 : 4, clusterId: sourceCluster.id })
-  })
-
-  it.each(['left', 'right'] as const)(
-    'places a cross-pane chip %s of a collapsed target chip',
-    (side) => {
+        targetGroup: {
+          ...GROUP,
+          tabOrder: ['one', 'two', ...GROUP.tabOrder],
+          tabClusters: [sourceCluster, CLUSTER]
+        }
+      },
+      {
+        name: 'a cross-pane collapsed chip',
+        activeDrag: chip('incoming-cluster', 'another-pane'),
+        overData: { ...chip(), collapsed: true },
+        targetGroup: { ...GROUP, tabClusters: [{ ...CLUSTER, collapsed: true }] }
+      },
+      {
+        name: 'a cross-pane equal-id chip',
+        activeDrag: chip('same', 'source'),
+        overData: chip('same', equalIdGroup.id),
+        targetGroup: equalIdGroup
+      },
+      {
+        name: 'a cross-pane equal-id member',
+        activeDrag: chip('same', 'source'),
+        overData: tab('b', equalIdGroup.id),
+        targetGroup: equalIdGroup
+      }
+    ])('places a chip at the whole-cluster boundary of $name', (testCase) => {
       expect(
         resolveTabClusterDropTarget({
-          activeDrag: chip('incoming-cluster', 'another-pane'),
-          overData: { ...chip(), collapsed: true },
-          targetGroup: { ...GROUP, tabClusters: [{ ...CLUSTER, collapsed: true }] },
+          activeDrag: testCase.activeDrag,
+          overData: testCase.overData,
+          targetGroup: testCase.targetGroup,
           side
         })
-      ).toEqual({ index: side === 'left' ? 1 : 4, clusterId: 'incoming-cluster' })
-    }
-  )
-
-  it.each(['left', 'right'] as const)(
-    'places a cross-pane equal-id chip at the target cluster’s %s boundary',
-    (side) => {
-      const targetGroup = {
-        ...GROUP,
-        id: 'destination',
-        tabClusters: [{ ...CLUSTER, id: 'same' }]
-      }
-      for (const overData of [chip('same', targetGroup.id), tab('b', targetGroup.id)]) {
-        expect(
-          resolveTabClusterDropTarget({
-            activeDrag: chip('same', 'source'),
-            overData,
-            targetGroup,
-            side
-          })
-        ).toEqual({ index: side === 'left' ? 1 : 4, clusterId: 'same' })
-      }
-    }
-  )
-
-  it('rejects chip drops onto their own chip', () => {
-    expect(
-      resolveTabClusterDropTarget({
-        activeDrag: chip(),
-        overData: chip(),
-        targetGroup: GROUP,
-        side: 'left'
-      })
-    ).toBeNull()
+      ).toEqual({ index: side === 'left' ? 1 : 4, clusterId: testCase.activeDrag.clusterId })
+    })
   })
 
-  it('rejects chip drops onto their own members', () => {
+  it.each([
+    { name: 'chip', overData: chip(), side: 'left' },
+    { name: 'member', overData: tab('b'), side: 'right' }
+  ] as const)('rejects chip drops onto their own $name', ({ overData, side }) => {
     expect(
       resolveTabClusterDropTarget({
         activeDrag: chip(),
-        overData: tab('b'),
+        overData,
         targetGroup: GROUP,
-        side: 'right'
+        side
       })
     ).toBeNull()
   })

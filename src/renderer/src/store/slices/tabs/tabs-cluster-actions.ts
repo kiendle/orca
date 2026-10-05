@@ -8,7 +8,7 @@ import {
   createTabsClusterStripActions,
   promoteClusterPreviewTabs
 } from './tabs-cluster-strip-actions'
-import { createTabsClusterMoveActions } from './tabs-cluster-move-actions'
+import { moveTabsToPane } from './tabs-drop-actions'
 
 export function createTabsClusterActions(
   set: TabsSliceSet,
@@ -16,6 +16,7 @@ export function createTabsClusterActions(
 ): Pick<
   TabsSlice,
   | 'setTabSelection'
+  | 'setRenamingTabCluster'
   | 'createTabCluster'
   | 'addTabsToCluster'
   | 'removeTabsFromCluster'
@@ -92,6 +93,7 @@ export function createTabsClusterActions(
         return { tabSelectionByGroupId }
       })
     },
+    setRenamingTabCluster: (request) => set({ renamingTabCluster: request }),
 
     createTabCluster: (groupId, tabIds, init) => {
       promoteClusterPreviewTabs(get, groupId, tabIds)
@@ -196,6 +198,20 @@ export function createTabsClusterActions(
       })
     },
     ...createTabsClusterStripActions(set, get),
-    ...createTabsClusterMoveActions(set, get)
+    moveTabCluster: (sourceGroupId, clusterId, target) => {
+      const source = findGroupAndWorktree(get().groupsByWorktree, sourceGroupId)
+      const cluster = source?.group.tabClusters?.find((candidate) => candidate.id === clusterId)
+      return source && cluster
+        ? moveTabsToPane(
+            set,
+            get,
+            source.worktreeId,
+            sourceGroupId,
+            cluster.tabIds,
+            target,
+            cluster
+          )
+        : false
+    }
   }
 }

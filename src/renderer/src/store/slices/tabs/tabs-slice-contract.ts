@@ -181,6 +181,9 @@ export type TabsSlice = {
   tabSelectionByGroupId: Record<string, TabStripSelection>
   /** null clears the pane's selection. */
   setTabSelection: (groupId: string, selection: TabStripSelection | null) => void
+  /** Cluster whose chip opens its rename field once mounted; the chip clears it on consume. Not persisted. */
+  renamingTabCluster: { groupId: string; clusterId: string } | null
+  setRenamingTabCluster: (request: { groupId: string; clusterId: string } | null) => void
   /** Preserves untouched source groups when gathering selected tabs. Returns the new cluster id. */
   createTabCluster: (
     groupId: string,

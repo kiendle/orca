@@ -1,7 +1,7 @@
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { collapseGroupLayout } from './tabs-layout'
 import { buildActiveSurfacePatch } from './tabs-surface'
-import { applyTransferredTabClusterMembership } from './tab-cluster-transfer'
+import { applyTransferredTabClusterMembership } from './tab-cluster-model'
 import {
   dedupeTabOrder,
   findGroupAndWorktree,

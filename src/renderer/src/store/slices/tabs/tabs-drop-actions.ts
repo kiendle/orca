@@ -4,9 +4,12 @@ import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contrac
 import { isPaneColumnSplitDropNoOp } from '../pane-column-split-drop-no-op'
 import { collapseGroupLayout, buildSplitNode, replaceLeaf } from './tabs-layout'
 import { buildActiveSurfacePatch } from './tabs-surface'
-import { applyTransferredTabClusterMembership } from './tab-cluster-transfer'
 import { promoteClusterPreviewTabs } from './tabs-cluster-strip-actions'
-import { mergeTabClusterRecords, normalizeTabGroupClusters } from './tab-cluster-model'
+import {
+  applyTransferredTabClusterMembership,
+  mergeTabClusterRecords,
+  normalizeTabGroupClusters
+} from './tab-cluster-model'
 import { applyTabOrderSortValues } from './tabs-tab-order'
 import {
   dedupeTabOrder,

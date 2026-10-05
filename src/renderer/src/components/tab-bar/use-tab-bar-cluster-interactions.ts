@@ -67,31 +67,25 @@ export function useTabBarClusterInteractions({
     const state = useAppStore.getState()
     const tabIds = [...cluster.tabIds]
     const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
+    // Cluster members use unified ids; floating hosts can omit their terminal strip items.
     const unifiedTabById = new Map(
       (state.unifiedTabsByWorktree[props.worktreeId] ?? []).map((tab) => [tab.id, tab])
     )
     const terminals = tabIds.flatMap((tabId) => {
-      const item = itemByUnifiedId.get(tabId)
       const tab = unifiedTabById.get(tabId)
-      if (tab?.contentType === 'terminal') {
-        return [
-          {
-            terminalTabId: tab.entityId,
-            tabLabel:
-              item?.type === 'terminal'
-                ? resolveTerminalTabTitle(item.data, generatedTitlesEnabled, item.data.title)
-                : resolveUnifiedTabLabel(tab, generatedTitlesEnabled)
-          }
-        ]
+      if (tab?.contentType !== 'terminal') {
+        return []
       }
-      return item?.type === 'terminal'
-        ? [
-            {
-              terminalTabId: item.id,
-              tabLabel: resolveTerminalTabTitle(item.data, generatedTitlesEnabled, item.data.title)
-            }
-          ]
-        : []
+      const item = itemByUnifiedId.get(tabId)
+      return [
+        {
+          terminalTabId: tab.entityId,
+          tabLabel:
+            item?.type === 'terminal'
+              ? resolveTerminalTabTitle(item.data, generatedTitlesEnabled, item.data.title)
+              : resolveUnifiedTabLabel(tab, generatedTitlesEnabled)
+        }
+      ]
     })
     guardRunningTerminalGroupClose({
       subjectKey: `tab-cluster:${JSON.stringify([props.worktreeId, groupId, cluster.id])}`,

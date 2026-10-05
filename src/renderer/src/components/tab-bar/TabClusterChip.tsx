@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -12,9 +12,8 @@ import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
 import { TabClusterContextMenu } from './TabClusterContextMenu'
 import { TAB_CLUSTER_COLOR_CLASSES } from './tab-cluster-colors'
 import { getDropIndicatorClasses, type DropIndicator } from './drop-indicator'
-import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
+import { useTabClusterChipGesture } from './tab-cluster-chip-gesture'
 import { useTabStripRename } from './use-tab-strip-rename'
-import { useTabClusterRenameRequest } from './tab-cluster-rename-request'
 
 export function TabClusterChip({
   cluster,
@@ -30,13 +29,27 @@ export function TabClusterChip({
   dropIndicator?: DropIndicator
 }): React.JSX.Element {
   const renameCluster = useAppStore((state) => state.renameTabCluster)
-  const setCollapsed = useAppStore((state) => state.setTabClusterCollapsed)
-  const restoreCollapseState = useAppStore((state) => state.restoreTabClusterCollapseState)
+  const renameRequested = useAppStore(
+    (state) =>
+      state.renamingTabCluster?.groupId === groupId &&
+      state.renamingTabCluster.clusterId === cluster.id
+  )
   const rename = useTabStripRename({
     value: cluster.name,
     onCommit: (name) => renameCluster(groupId, cluster.id, name)
   })
-  useTabClusterRenameRequest(worktreeId, groupId, cluster.id, rename.handleRenameOpen)
+  const { isEditing, handleRenameOpen } = rename
+  const openRename = useCallback(() => {
+    if (!isEditing) {
+      handleRenameOpen()
+    }
+  }, [isEditing, handleRenameOpen])
+  useEffect(() => {
+    if (renameRequested) {
+      useAppStore.getState().setRenamingTabCluster(null)
+      openRename()
+    }
+  }, [renameRequested, openRename])
   const [menuOpen, setMenuOpen] = useState(false)
   const sortableId = getTabClusterSortableId(groupId, cluster.id)
   const dragData: TabClusterDragItemData = {
@@ -49,30 +62,12 @@ export function TabClusterChip({
     collapsed: cluster.collapsed
   }
   const { attributes, listeners, setNodeRef } = useSortable({ id: sortableId, data: dragData })
-  const toggleCollapsed = (): void => setCollapsed(groupId, cluster.id, !cluster.collapsed)
-  const clickCountRef = useRef(0)
-  const collapseBeforeClickRef = useRef<Pick<TabCluster, 'collapsed' | 'shownTabId'> | null>(null)
-  const { onPointerDown } = useTabStripPointerActivation({
-    onActivate: () => {
-      const clickCount = clickCountRef.current
-      clickCountRef.current = 0
-      // Why: Collapse updates can lose the browser's dblclick before React receives it.
-      if (clickCount >= 2) {
-        // Why: toggling back would recapture the active member instead of the original sticky one.
-        if (collapseBeforeClickRef.current) {
-          restoreCollapseState(groupId, cluster.id, collapseBeforeClickRef.current)
-          collapseBeforeClickRef.current = null
-        }
-        rename.handleRenameOpen()
-      } else {
-        collapseBeforeClickRef.current = {
-          collapsed: cluster.collapsed,
-          shownTabId: cluster.shownTabId
-        }
-        toggleCollapsed()
-      }
-    },
-    disabled: rename.isEditing
+  const gesture = useTabClusterChipGesture({
+    cluster,
+    groupId,
+    isEditing,
+    onRename: openRename,
+    dragListener: (event) => listeners?.onPointerDown?.(event)
   })
 
   useEffect(() => {
@@ -101,32 +96,7 @@ export function TabClusterChip({
         'relative flex h-full shrink-0 cursor-pointer select-none items-center gap-1.5 px-2 text-xs text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
         getDropIndicatorClasses(dropIndicator ?? null)
       )}
-      onPointerDown={(event) => {
-        clickCountRef.current = 0
-        onPointerDown(event, (dragEvent) => listeners?.onPointerDown?.(dragEvent))
-      }}
-      onMouseDown={(event) => {
-        clickCountRef.current = event.detail
-      }}
-      onClick={(event) => {
-        if (event.detail === 0 && !rename.isEditing) {
-          toggleCollapsed()
-        }
-      }}
-      onKeyDown={(event) => {
-        if (rename.isEditing || (event.key !== 'Enter' && event.key !== ' ')) {
-          return
-        }
-        event.preventDefault()
-        event.stopPropagation()
-        toggleCollapsed()
-      }}
-      onDoubleClick={(event) => {
-        event.stopPropagation()
-        if (clickCountRef.current === 0 && !rename.isEditing) {
-          rename.handleRenameOpen()
-        }
-      }}
+      {...gesture}
     >
       <span
         aria-hidden
@@ -172,7 +142,7 @@ export function TabClusterChip({
       worktreeId={worktreeId}
       open={menuOpen}
       onOpenChange={setMenuOpen}
-      onRename={rename.handleRenameOpen}
+      onRename={openRename}
       onClose={onClose}
     >
       <div data-tab-strip-slot={sortableId} className="flex h-full shrink-0">

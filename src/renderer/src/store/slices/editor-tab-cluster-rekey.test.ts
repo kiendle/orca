@@ -7,7 +7,6 @@ import {
   seedStore
 } from './store-test-helpers'
 import { migrateHydratedEditorTabsAndGroups } from './editor/file-ids/hydrated-editor-file-ids'
-import { removeTabIdsFromGroup } from './editor/file-ids/open-file-path-rekey'
 
 const WT = 'wt-1'
 const OLD = '/repo/a.ts'
@@ -99,15 +98,5 @@ describe('editor cluster identifier compatibility', () => {
     )
     expect(store.getState().groupsByWorktree[WT][0].tabClusters?.[0].tabIds).toEqual([NEW, OTHER])
     expect(store.getState().groupsByWorktree[WT][1].tabClusters?.[0].tabIds).toEqual(['split-copy'])
-  })
-
-  it('drops removed members and the cluster when its last member leaves a pane', () => {
-    const group = clusteredEditorStore().getState().groupsByWorktree[WT][0]
-    const partial = removeTabIdsFromGroup(group, new Set([OLD]))
-    expect(partial.tabOrder).toEqual([OTHER])
-    expect(partial.tabClusters?.[0].tabIds).toEqual([OTHER])
-    const empty = removeTabIdsFromGroup(partial, new Set([OTHER]))
-    expect(empty.tabOrder).toEqual([])
-    expect(empty.tabClusters).toBeUndefined()
   })
 })

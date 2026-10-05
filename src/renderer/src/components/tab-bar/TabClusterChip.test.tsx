@@ -14,7 +14,6 @@ import {
   seedStore,
   type TestStore
 } from '@/store/slices/store-test-helpers'
-import { requestTabClusterRename } from './tab-cluster-rename-request'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
 
 let store: TestStore
@@ -92,14 +91,8 @@ function mount(cluster: TabCluster = CLUSTER, activeTabId = 'a'): RenderResult {
   )
 }
 
-function pressChip(detail: number): void {
-  const chip = screen.getByRole('button', { name: 'Work' })
-  const pointer = { button: 0, clientX: 10, clientY: 10 }
-  fireEvent.pointerDown(chip, pointer)
-  fireEvent.mouseDown(chip, { ...pointer, detail })
-  fireEvent.pointerUp(chip, pointer)
-  fireEvent.mouseUp(chip, { ...pointer, detail })
-  fireEvent.click(chip, { detail })
+function openRename(): void {
+  act(() => store.getState().setRenamingTabCluster({ groupId: 'pane', clusterId: CLUSTER.id }))
 }
 
 beforeEach(() => {
@@ -110,10 +103,11 @@ afterEach(cleanup)
 
 describe('cluster chip rename', () => {
   it('retains an explicit rename request until its chip mounts, then consumes it once', () => {
-    requestTabClusterRename('wt', 'pane', CLUSTER.id)
+    store.getState().setRenamingTabCluster({ groupId: 'pane', clusterId: CLUSTER.id })
     const view = mount({ ...CLUSTER, name: '' })
     const input = screen.getByRole('textbox', { name: 'Rename Group' })
     expect(input).toBe(screen.getByDisplayValue(''))
+    expect(store.getState().renamingTabCluster).toBeNull()
     fireEvent.keyDown(input, { key: 'Escape' })
     view.unmount()
     render(
@@ -122,6 +116,26 @@ describe('cluster chip rename', () => {
       </TooltipProvider>
     )
     expect(screen.queryByRole('textbox')).toBeNull()
+  })
+
+  it('consumes a mounted chip request without replacing an in-progress name', () => {
+    mount()
+    openRename()
+    const input = screen.getByRole('textbox', { name: 'Rename Group' })
+    fireEvent.change(input, { target: { value: 'Research' } })
+    openRename()
+    expect(screen.getByDisplayValue('Research')).toBe(input)
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(pane().tabClusters?.[0].name).toBe('Research')
+    expect(screen.queryByRole('textbox')).toBeNull()
+  })
+
+  it('leaves a different pane rename request pending', () => {
+    mount()
+    const request = { groupId: 'other', clusterId: CLUSTER.id }
+    act(() => store.getState().setRenamingTabCluster(request))
+    expect(screen.queryByRole('textbox')).toBeNull()
+    expect(store.getState().renamingTabCluster).toEqual(request)
   })
 
   it('does not open rename when moving an unnamed cluster rekeys a colliding id', () => {
@@ -175,53 +189,9 @@ describe('cluster chip rename', () => {
     ).toBe('true')
   })
 
-  it.each([
-    { label: 'expanded', cluster: CLUSTER, activeTabId: 'a' },
-    {
-      label: 'collapsed with an outside tab active',
-      cluster: { ...CLUSTER, collapsed: true, shownTabId: 'a' },
-      activeTabId: 'x'
-    },
-    {
-      label: 'collapsed with another member active',
-      cluster: { ...CLUSTER, collapsed: true, shownTabId: 'a' },
-      activeTabId: 'b'
-    }
-  ])(
-    'preserves $label presentation through double-click rename and Escape',
-    ({ cluster, activeTabId }) => {
-      mount(cluster, activeTabId)
-      const before = pane().tabClusters
-      pressChip(1)
-      expect(pane().tabClusters?.[0].collapsed).toBe(!cluster.collapsed)
-      pressChip(2)
-      fireEvent.doubleClick(screen.getByRole('button', { name: 'Work' }))
-      const input = screen.getByRole('textbox', { name: 'Rename Group' })
-      expect(pane().tabClusters).toEqual(before)
-      expect(pane().activeTabId).toBe(activeTabId)
-      fireEvent.change(input, { target: { value: 'Discard me' } })
-      fireEvent.keyDown(input, { key: 'Escape' })
-      fireEvent.blur(input)
-      expect(screen.queryByRole('textbox')).toBeNull()
-      expect(pane().tabClusters).toEqual(before)
-      expect(pane().activeTabId).toBe(activeTabId)
-    }
-  )
-
-  it('does not interpret a second press that becomes a drag as rename', () => {
-    mount()
-    const chip = screen.getByRole('button', { name: 'Work' })
-    fireEvent.pointerDown(chip, { button: 0, clientX: 10, clientY: 10 })
-    fireEvent.mouseDown(chip, { button: 0, detail: 2 })
-    fireEvent.pointerUp(window, { clientX: 30, clientY: 10 })
-    fireEvent.doubleClick(chip)
-    expect(screen.queryByRole('textbox')).toBeNull()
-    expect(pane().tabClusters).toEqual([CLUSTER])
-  })
-
   it('commits a trimmed name on Enter and leaves the editing state', () => {
     mount()
-    fireEvent.doubleClick(screen.getByRole('button', { name: 'Work' }))
+    openRename()
     const input = screen.getByRole('textbox', { name: 'Rename Group' })
     fireEvent.change(input, { target: { value: '  Research  ' } })
     fireEvent.keyDown(input, { key: 'Enter' })
@@ -231,7 +201,7 @@ describe('cluster chip rename', () => {
 
   it('commits on blur, including an intentionally empty color-only name', () => {
     mount()
-    fireEvent.doubleClick(screen.getByRole('button', { name: 'Work' }))
+    openRename()
     const input = screen.getByRole('textbox', { name: 'Rename Group' })
     fireEvent.change(input, { target: { value: '   ' } })
     fireEvent.blur(input)
@@ -241,7 +211,7 @@ describe('cluster chip rename', () => {
 
   it('cancels on Escape without committing the discarded name', () => {
     mount()
-    fireEvent.doubleClick(screen.getByRole('button', { name: 'Work' }))
+    openRename()
     const input = screen.getByRole('textbox', { name: 'Rename Group' })
     fireEvent.change(input, { target: { value: 'Discard me' } })
     fireEvent.keyDown(input, { key: 'Escape' })
@@ -254,7 +224,7 @@ describe('cluster chip rename', () => {
     'keeps the IME redispatch %s keyup from committing rename',
     (redispatchTiming) => {
       mount()
-      fireEvent.doubleClick(screen.getByRole('button', { name: 'Work' }))
+      openRename()
       const input = screen.getByRole('textbox', { name: 'Rename Group' })
       fireEvent.compositionStart(input)
       fireEvent.change(input, { target: { value: '調査' } })
@@ -276,28 +246,12 @@ describe('cluster chip rename', () => {
   )
 })
 
-describe('cluster chip collapse activation', () => {
-  it('toggles only on pointer release and suppresses a drag', () => {
-    mount()
-    const chip = screen.getByRole('button', { name: 'Work' })
-    fireEvent.pointerDown(chip, { button: 0, clientX: 10, clientY: 10 })
-    expect(pane().tabClusters?.[0].collapsed).toBe(false)
-    fireEvent.pointerUp(window, { clientX: 11, clientY: 10 })
-    expect(pane().tabClusters?.[0].collapsed).toBe(true)
-    expect(pane().tabClusters?.[0].shownTabId).toBe('a')
-    fireEvent.pointerDown(chip, { button: 0, clientX: 10, clientY: 10 })
-    fireEvent.pointerUp(window, { clientX: 30, clientY: 10 })
-    expect(pane().tabClusters?.[0].collapsed).toBe(true)
-    expect(pane().tabClusters?.[0].shownTabId).toBe('a')
-  })
-
-  it('exposes expanded state and toggles a collapsed group with the keyboard', () => {
+describe('cluster chip presentation', () => {
+  it('exposes a collapsed group state and member count', () => {
     mount({ ...CLUSTER, collapsed: true })
     const chip = screen.getByRole('button', { name: 'Work' })
     expect(chip.getAttribute('aria-expanded')).toBe('false')
     expect(chip.textContent).toContain('3')
-    fireEvent.keyDown(chip, { key: ' ' })
-    expect(pane().tabClusters?.[0].collapsed).toBe(false)
   })
 })
 

@@ -11,8 +11,7 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { Tab } from '../../../../shared/tab-types'
 import { TAB_CLUSTER_COLOR_CLASSES } from './tab-cluster-colors'
-import { getTabClusterMenuTargets } from './tab-cluster-menu-targets'
-import { requestTabClusterRename } from './tab-cluster-rename-request'
+import { getTabClusterMenuTargets } from './tab-strip-selection'
 
 const EMPTY_TABS: readonly Tab[] = []
 
@@ -66,7 +65,7 @@ export function TabClusterMenuSection({
           onQueueNewCluster(() => {
             const clusterId = createCluster(groupId, targets.groupableTabIds)
             if (clusterId) {
-              requestTabClusterRename(worktreeId, groupId, clusterId)
+              useAppStore.getState().setRenamingTabCluster({ groupId, clusterId })
             }
           })
         }
