@@ -49,10 +49,15 @@ export function createTabsMoveActions(
           ...state.activeGroupIdByWorktree,
           [worktreeId]: opts?.activate ? targetGroupId : state.activeGroupIdByWorktree[worktreeId]
         }
-        const sourceRecentTabIds = sanitizeRecentTabIds(
-          (sourceGroup.recentTabIds ?? []).filter((id) => id !== tabId),
-          sourceOrder
-        )
+        const sourceActiveTabId =
+          sourceGroup.activeTabId === tabId
+            ? pickTabCloseSuccessor(sourceGroup, dedupedSourceGroupOrder, tabId)
+            : sourceGroup.activeTabId
+        const sanitizedSourceRecent = sanitizeRecentTabIds(sourceGroup.recentTabIds, sourceOrder)
+        const sourceRecentTabIds =
+          sourceActiveTabId && sourceActiveTabId !== sourceGroup.activeTabId
+            ? pushRecentTabId(sanitizedSourceRecent, sourceActiveTabId)
+            : sanitizedSourceRecent
         const pinnedTabIds = new Set(
           (state.unifiedTabsByWorktree[worktreeId] ?? [])
             .filter((candidate) => candidate.isPinned)
@@ -63,10 +68,7 @@ export function createTabsMoveActions(
             return applyTransferredTabClusterMembership(
               {
                 ...group,
-                activeTabId:
-                  group.activeTabId === tabId
-                    ? pickTabCloseSuccessor(sourceGroup, dedupedSourceGroupOrder, tabId)
-                    : group.activeTabId,
+                activeTabId: sourceActiveTabId,
                 tabOrder: sourceOrder,
                 recentTabIds: sourceRecentTabIds
               },

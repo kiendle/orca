@@ -89,6 +89,7 @@ export function TabClusterChip({
       {...attributes}
       {...(rename.isEditing ? undefined : listeners)}
       data-tab-cluster-chip={cluster.id}
+      data-floating-terminal-no-drag
       aria-label={cluster.name || translate('components.tabCluster.unnamed', 'Unnamed group')}
       aria-expanded={!cluster.collapsed}
       className={cn(

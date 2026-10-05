@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { getStateMock } = vi.hoisted(() => ({ getStateMock: vi.fn() }))
+vi.mock('@/store', () => ({ useAppStore: { getState: getStateMock } }))
+
 import type { TabGroup } from '../../../../../shared/tab-types'
 import {
   createTestStore,
+  makeOpenFile,
   makeTabGroup,
   makeUnifiedTab,
   seedStore,
@@ -9,6 +14,7 @@ import {
 } from '../store-test-helpers'
 import { createTabsSliceMockApi } from '../tabs-slice-test-harness'
 import { getHiddenClusterTabIds } from './tab-cluster-model'
+import { handleSwitchRecentTab } from '@/hooks/ipc-tab-switch'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 createTabsSliceMockApi()
@@ -52,6 +58,7 @@ function seedPane(ids: string[] = ['a', 'b', 'x']): void {
 describe('collapsed cluster sticky member', () => {
   beforeEach(() => {
     store = createTestStore()
+    getStateMock.mockImplementation(() => store.getState())
   })
 
   it('captures the member on collapse and does not follow later activations', () => {
@@ -121,6 +128,43 @@ describe('collapsed cluster sticky member', () => {
     expect(pane().tabOrder).toEqual(['b', 'x', 'y'])
     expect([...getHiddenClusterTabIds(pane())]).toEqual(['b'])
     expect(pane().tabClusters?.[0].shownTabId).toBeUndefined()
+  })
+
+  it.each([
+    { name: 'close', remove: () => store.getState().closeUnifiedTab('a') },
+    {
+      name: 'move',
+      remove: (targetGroupId: string) => store.getState().moveUnifiedTabToGroup('a', targetGroupId)
+    },
+    {
+      name: 'drop',
+      remove: (targetGroupId: string) =>
+        store.getState().dropUnifiedTab('a', { groupId: targetGroupId })
+    }
+  ])('$name records the visible successor for Ctrl+Tab', ({ remove }) => {
+    const ids = ['a', 'b', 'c']
+    seedPane(ids)
+    store.setState({ openFiles: ids.map((id) => makeOpenFile({ id, worktreeId: WT })) })
+    const targetGroupId = store
+      .getState()
+      .createEmptySplitGroup(WT, PANE, 'right', { activate: false })
+    if (!targetGroupId) {
+      throw new Error('Expected a target pane')
+    }
+    store.getState().activateTab('c')
+    store.getState().activateTab('b')
+    store.getState().activateTab('a')
+    store.getState().setTabClusterCollapsed(PANE, CLUSTER, true)
+
+    remove(targetGroupId)
+    expect(pane().activeTabId).toBe('c')
+    expect(pane().tabOrder).toEqual(['b', 'c'])
+    expect(pane().recentTabIds).toEqual(['b', 'c'])
+    expect([...getHiddenClusterTabIds(pane())]).toEqual(['b'])
+
+    store.getState().focusGroup(WT, PANE)
+    expect(handleSwitchRecentTab()).toBe(true)
+    expect(pane().activeTabId).toBe('b')
   })
 
   it('closing the active sticky member skips hidden visual neighbors without prior MRU candidates', () => {

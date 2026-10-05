@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
 import { useTerminalTabColdParking } from '@/components/terminal-pane/use-terminal-tab-cold-parking'
 import type { OpenFile } from '@/store/slices/editor'
+import { getHiddenClusterTabIds } from '@/store/slices/tabs/tab-cluster-model'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
@@ -164,26 +165,33 @@ export function useFloatingTerminalPanelItems({
       }),
     [activeGroup, groupTabs]
   )
-  const visibleFloatingTabOrder = useMemo(
-    () =>
-      tabBarOrder.filter((visibleId) => {
-        const tab = resolveGroupTabFromVisibleId(groupTabs, visibleId)
-        if (!tab) {
-          return false
-        }
-        if (tab.contentType === 'terminal') {
-          return terminalItems.some((item) => item.unifiedTabId === tab.id)
-        }
-        if (tab.contentType === 'browser') {
-          return browserItems.some((item) => item.tabId === tab.id)
-        }
-        if (tab.contentType === 'simulator') {
-          return simulatorItems.some((item) => item.id === tab.id)
-        }
-        return editorItems.some((item) => item.tabId === tab.id)
-      }),
-    [browserItems, editorItems, groupTabs, simulatorItems, tabBarOrder, terminalItems]
-  )
+  const visibleFloatingTabOrder = useMemo(() => {
+    const hiddenTabIds = activeGroup ? getHiddenClusterTabIds(activeGroup) : null
+    return tabBarOrder.filter((visibleId) => {
+      const tab = resolveGroupTabFromVisibleId(groupTabs, visibleId)
+      if (!tab || hiddenTabIds?.has(tab.id)) {
+        return false
+      }
+      if (tab.contentType === 'terminal') {
+        return terminalItems.some((item) => item.unifiedTabId === tab.id)
+      }
+      if (tab.contentType === 'browser') {
+        return browserItems.some((item) => item.tabId === tab.id)
+      }
+      if (tab.contentType === 'simulator') {
+        return simulatorItems.some((item) => item.id === tab.id)
+      }
+      return editorItems.some((item) => item.tabId === tab.id)
+    })
+  }, [
+    activeGroup,
+    browserItems,
+    editorItems,
+    groupTabs,
+    simulatorItems,
+    tabBarOrder,
+    terminalItems
+  ])
   const activeBrowserTab = activeBrowserId
     ? (browserTabs.find((tab) => tab.id === activeBrowserId) ?? null)
     : null

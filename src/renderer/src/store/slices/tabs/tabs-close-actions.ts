@@ -4,6 +4,7 @@ import {
   dedupeTabOrder,
   findGroupForTab,
   findTabAndWorktree,
+  pushRecentTabId,
   sanitizeRecentTabIds
 } from '../tab-group-state'
 import { buildActiveSurfacePatch } from './tabs-surface'
@@ -74,14 +75,15 @@ export function createTabsCloseActions(
         }
         get().clearNativeChatLaunchDraft(structuredAgentSessionTabId(tab.entityId))
       }
-      let nextActiveTabId = group.activeTabId
-      if (group.activeTabId === tabId) {
-        nextActiveTabId = pickTabCloseSuccessor(group, dedupedGroupOrder, tabId)
-      }
-      const nextRecentTabIds = sanitizeRecentTabIds(
-        (group.recentTabIds ?? []).filter((id) => id !== tabId),
-        remainingOrder
-      )
+      const nextActiveTabId =
+        group.activeTabId === tabId
+          ? pickTabCloseSuccessor(group, dedupedGroupOrder, tabId)
+          : group.activeTabId
+      const sanitizedRecent = sanitizeRecentTabIds(group.recentTabIds, remainingOrder)
+      const nextRecentTabIds =
+        nextActiveTabId && nextActiveTabId !== group.activeTabId
+          ? pushRecentTabId(sanitizedRecent, nextActiveTabId)
+          : sanitizedRecent
       const terminalEntityId = tab.contentType === 'terminal' ? tab.entityId : null
 
       set((current) => {

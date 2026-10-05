@@ -111,22 +111,27 @@ export function moveTabsToPane(
       sourceGroup.activeTabId && memberIds.has(sourceGroup.activeTabId)
         ? sourceGroup.activeTabId
         : tabIds[0]
-    const sourceRecentTabIds = sanitizeRecentTabIds(sourceGroup.recentTabIds, sourceOrder)
+    const sourceActiveTabId =
+      sourceGroup.activeTabId && memberIds.has(sourceGroup.activeTabId)
+        ? pickTabCloseSuccessor(
+            sourceGroup,
+            dedupedSourceGroupOrder.filter(
+              (id) => !memberIds.has(id) || id === sourceGroup.activeTabId
+            ),
+            sourceGroup.activeTabId
+          )
+        : sourceGroup.activeTabId
+    const sanitizedSourceRecent = sanitizeRecentTabIds(sourceGroup.recentTabIds, sourceOrder)
+    const sourceRecentTabIds =
+      sourceActiveTabId && sourceActiveTabId !== sourceGroup.activeTabId
+        ? pushRecentTabId(sanitizedSourceRecent, sourceActiveTabId)
+        : sanitizedSourceRecent
     nextGroups = nextGroups.map((group) => {
       if (group.id === sourceGroupId) {
         return applyTransferredTabClusterMembership(
           {
             ...group,
-            activeTabId:
-              group.activeTabId && memberIds.has(group.activeTabId)
-                ? pickTabCloseSuccessor(
-                    sourceGroup,
-                    dedupedSourceGroupOrder.filter(
-                      (id) => !memberIds.has(id) || id === group.activeTabId
-                    ),
-                    group.activeTabId
-                  )
-                : group.activeTabId,
+            activeTabId: sourceActiveTabId,
             tabOrder: sourceOrder,
             recentTabIds: sourceRecentTabIds
           },

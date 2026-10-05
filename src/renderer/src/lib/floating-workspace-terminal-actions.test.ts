@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { Tab } from '../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import {
   createFloatingWorkspaceBrowserTab,
@@ -618,6 +618,102 @@ describe('switchFloatingWorkspaceTab', () => {
     expect(store.setActiveTab).toHaveBeenCalledWith('tab-2')
     expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith('tab-2')
     expect(activateWebRuntimeSessionTabMock).not.toHaveBeenCalled()
+  })
+
+  describe.each<Parameters<typeof switchFloatingWorkspaceTab>[2]>([
+    'all-types',
+    'same-type',
+    'terminal'
+  ])('%s with a collapsed cluster', (mode) => {
+    it.each([
+      {
+        label: 'the only visible tab on next',
+        tabOrder: ['a', 'b', 'c'],
+        activeId: 'c',
+        direction: 1,
+        target: null
+      },
+      {
+        label: 'the only visible tab on previous',
+        tabOrder: ['a', 'b', 'c'],
+        activeId: 'c',
+        direction: -1,
+        target: null
+      },
+      {
+        label: 'the next visible tab across hidden members',
+        tabOrder: ['a', 'b', 'c', 'd'],
+        activeId: 'd',
+        direction: 1,
+        target: 'c'
+      },
+      {
+        label: 'the previous visible tab across hidden members',
+        tabOrder: ['a', 'b', 'c', 'd'],
+        activeId: 'c',
+        direction: -1,
+        target: 'd'
+      },
+      {
+        label: 'the shown member on next',
+        tabOrder: ['a', 'b', 'c'],
+        activeId: 'c',
+        shownTabId: 'b',
+        direction: 1,
+        target: 'b'
+      },
+      {
+        label: 'the active member on previous',
+        tabOrder: ['a', 'b', 'c'],
+        activeId: 'b',
+        direction: -1,
+        target: 'c'
+      }
+    ])(
+      'skips hidden members for $label',
+      ({ tabOrder, activeId, shownTabId, direction, target }) => {
+        const group: TabGroup = {
+          id: 'floating-group',
+          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+          activeTabId: activeId,
+          tabOrder,
+          recentTabIds: [activeId],
+          tabClusters: [
+            {
+              id: 'cluster',
+              name: 'Work',
+              color: 'blue',
+              collapsed: true,
+              tabIds: ['a', 'b'],
+              ...(shownTabId ? { shownTabId } : {})
+            }
+          ]
+        }
+        const store = {
+          activeGroupIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: group.id },
+          activateTab: vi.fn(),
+          browserTabsByWorktree: {},
+          groupsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [group] },
+          openFiles: [],
+          setActiveTab: vi.fn(),
+          tabsByWorktree: {
+            [FLOATING_TERMINAL_WORKTREE_ID]: tabOrder.map((id) => makeTab(`entity-${id}`))
+          },
+          unifiedTabsByWorktree: {
+            [FLOATING_TERMINAL_WORKTREE_ID]: tabOrder.map((id) => ({
+              ...makeUnifiedTerminalTab(id),
+              entityId: `entity-${id}`
+            }))
+          }
+        }
+
+        expect(switchFloatingWorkspaceTab(store, direction, mode)).toBe(target !== null)
+        expect(store.activateTab.mock.calls).toEqual(target ? [[target]] : [])
+        expect(store.setActiveTab.mock.calls).toEqual(target ? [[`entity-${target}`]] : [])
+        expect(focusTerminalTabSurfaceMock.mock.calls).toEqual(target ? [[`entity-${target}`]] : [])
+        expect(group.tabClusters?.[0].collapsed).toBe(true)
+      }
+    )
   })
 
   it('cycles browser tabs locally while a web runtime is active', () => {

@@ -15,6 +15,7 @@ import {
   type TestStore
 } from '@/store/slices/store-test-helpers'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
+import { createFloatingTerminalPanelDragActions } from '../floating-terminal/floating-terminal-panel-drag-actions'
 
 let store: TestStore
 
@@ -253,6 +254,57 @@ describe('cluster chip presentation', () => {
     expect(chip.getAttribute('aria-expanded')).toBe('false')
     expect(chip.textContent).toContain('3')
   })
+})
+
+describe('cluster chip floating titlebar interactions', () => {
+  it.each(['chip', 'label'])(
+    'does not drag or maximize the floating panel from the %s',
+    (targetKind) => {
+      const view = mount()
+      const previewUserBounds = vi.fn()
+      const commitUserBounds = vi.fn()
+      const toggleMaximized = vi.fn()
+      const actions = createFloatingTerminalPanelDragActions({
+        maximized: false,
+        dragRef: { current: null },
+        bounds: { left: 120, top: 96, width: 760, height: 420 },
+        focusPanelForShortcuts: vi.fn(),
+        previewUserBounds,
+        commitUserBounds,
+        toggleMaximized
+      })
+      view.rerender(
+        <TooltipProvider>
+          <div
+            data-testid="floating-titlebar"
+            onPointerDown={actions.handleDragStart}
+            onPointerMove={actions.handleDragMove}
+            onPointerUp={actions.handleDragEnd}
+            onDoubleClick={actions.handleTitlebarDoubleClick}
+          >
+            <ChipsFromStore />
+          </div>
+        </TooltipProvider>
+      )
+      const titlebar = screen.getByTestId('floating-titlebar')
+      const setPointerCapture = vi.fn()
+      titlebar.setPointerCapture = setPointerCapture
+      const target =
+        targetKind === 'chip'
+          ? screen.getByRole('button', { name: 'Work' })
+          : screen.getByText('Work')
+
+      fireEvent.pointerDown(target, { button: 0, pointerId: 1, clientX: 10, clientY: 20 })
+      fireEvent.pointerMove(titlebar, { pointerId: 1, clientX: 34, clientY: 32 })
+      fireEvent.pointerUp(titlebar, { pointerId: 1, clientX: 34, clientY: 32 })
+      fireEvent.doubleClick(target, { button: 0 })
+
+      expect(setPointerCapture).not.toHaveBeenCalled()
+      expect(previewUserBounds).not.toHaveBeenCalled()
+      expect(commitUserBounds).not.toHaveBeenCalled()
+      expect(toggleMaximized).not.toHaveBeenCalled()
+    }
+  )
 })
 
 describe('cluster chip context menu dismissal', () => {

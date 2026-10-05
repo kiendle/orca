@@ -9,6 +9,7 @@ import {
   type TypeCyclableTab
 } from '@/components/terminal/tab-type-cycle'
 import type { AppState } from '@/store/types'
+import { getHiddenClusterTabIds } from '@/store/slices/tabs/tab-cluster-model'
 import { resolveBrowserWorkspaceOwner } from './browser-workspace-source-resolution'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from './floating-terminal'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
@@ -269,7 +270,11 @@ export function switchFloatingWorkspaceTab(
   if (!group) {
     return false
   }
-  const visibleTabs = getFloatingWorkspaceVisibleTabs(store, group)
+  const navTabs = getFloatingWorkspaceVisibleTabs(store, group)
+  const hiddenTabIds = getHiddenClusterTabIds(group)
+  const visibleTabs = hiddenTabIds.size
+    ? navTabs.filter((entry) => !hiddenTabIds.has(entry.tabId ?? entry.id))
+    : navTabs
   if (visibleTabs.length <= 1) {
     return false
   }
