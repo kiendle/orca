@@ -205,7 +205,8 @@ test.describe('Tab clusters', () => {
       await expect(terminalTab(orcaPage, pane.groupId, tab)).toBeVisible()
     }
 
-    await chip.dblclick()
+    await chip.click({ button: 'right' })
+    await orcaPage.getByRole('menuitem', { name: 'Rename Group', exact: true }).click()
     const renameInput = chip.getByRole('textbox', { name: 'Rename Group', exact: true })
     await expect(renameInput).toBeFocused()
     await expect(renameInput).toHaveValue('Build terminals')

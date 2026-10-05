@@ -109,50 +109,24 @@ describe('cluster chip gestures', () => {
     expect(chip.getAttribute('aria-expanded')).toBe('true')
   })
 
-  describe.each([
-    { delivery: 'delivered', deliverDoubleClick: true },
-    { delivery: 'dropped', deliverDoubleClick: false }
-  ])('double-click rename when dblclick is $delivery', ({ deliverDoubleClick }) => {
-    it.each([
-      { label: 'expanded', cluster: CLUSTER, activeTabId: 'a' },
-      {
-        label: 'collapsed with an outside tab active',
-        cluster: { ...CLUSTER, collapsed: true, shownTabId: 'a' },
-        activeTabId: 'x'
-      },
-      {
-        label: 'collapsed with another member active',
-        cluster: { ...CLUSTER, collapsed: true, shownTabId: 'a' },
-        activeTabId: 'b'
-      }
-    ])('restores $label presentation, including after Escape', ({ cluster, activeTabId }) => {
-      mount(cluster, activeTabId)
-      const before = pane().tabClusters
-      pressChip(1)
-      expect(pane().tabClusters?.[0].collapsed).toBe(!cluster.collapsed)
-      const chip = pressChip(2)
-      const input = screen.getByRole('textbox', { name: 'Rename Group' })
-      expect(pane().tabClusters).toEqual(before)
-      expect(pane().activeTabId).toBe(activeTabId)
-      fireEvent.change(input, { target: { value: 'Discard me' } })
-      if (deliverDoubleClick) {
-        fireEvent.doubleClick(chip, { detail: 2 })
-      }
-      expect(screen.getByDisplayValue('Discard me')).toBe(input)
-      fireEvent.keyDown(input, { key: 'Escape' })
-      fireEvent.blur(input)
-      expect(screen.queryByRole('textbox')).toBeNull()
-      expect(pane().tabClusters).toEqual(before)
-      expect(pane().activeTabId).toBe(activeTabId)
-    })
+  it('toggles a double click twice without opening rename', () => {
+    mount({ ...CLUSTER, collapsed: true, shownTabId: 'a' })
+    const chip = pressChip(1)
+    expect(pane().tabClusters?.[0].collapsed).toBe(false)
+    expect(chip.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.queryByRole('textbox')).toBeNull()
+    pressChip(2)
+    fireEvent.doubleClick(chip, { detail: 2 })
+    expect(pane().tabClusters?.[0]).toMatchObject({ collapsed: true, shownTabId: 'a' })
+    expect(chip.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('textbox')).toBeNull()
   })
 
   it.each([15, 30])(
     'does not toggle a drag released at x=%i, even if click follows',
     (releaseX) => {
       mount()
-      const chip = pressChip(1, releaseX)
-      fireEvent.doubleClick(chip, { detail: 2 })
+      pressChip(1, releaseX)
       expect(pane().tabClusters).toEqual([CLUSTER])
       expect(screen.queryByRole('textbox')).toBeNull()
       pressChip(1)
@@ -160,12 +134,11 @@ describe('cluster chip gestures', () => {
     }
   )
 
-  it('does not rename or undo the first click when the second press becomes a drag', () => {
+  it('leaves the first click toggle unchanged when the second press becomes a drag', () => {
     mount()
     pressChip(1)
     const beforeDrag = pane().tabClusters
-    const chip = pressChip(2, 30)
-    fireEvent.doubleClick(chip, { detail: 2 })
+    pressChip(2, 30)
     expect(pane().tabClusters).toEqual(beforeDrag)
     expect(screen.queryByRole('textbox')).toBeNull()
   })
@@ -202,7 +175,6 @@ describe('cluster chip gestures', () => {
     fireEvent.click(chip, { detail: 2 })
     pressChip(1)
     pressChip(2)
-    fireEvent.doubleClick(chip, { detail: 2 })
     fireEvent.keyDown(chip, { key: 'Enter' })
     fireEvent.keyDown(chip, { key: ' ' })
     fireEvent.click(chip, { detail: 0 })

@@ -71,9 +71,9 @@ export function TabClusterMenuSection({
         }
       >
         <FolderPlus className="size-3.5" />
-        {targets.tabIds.length > 1
+        {targets.groupableTabIds.length > 1
           ? translate('components.tabCluster.addNewMany', 'Add {{count}} Tabs to New Group', {
-              count: targets.tabIds.length
+              count: targets.groupableTabIds.length
             })
           : translate('components.tabCluster.addNew', 'Add Tab to New Group')}
       </DropdownMenuItem>

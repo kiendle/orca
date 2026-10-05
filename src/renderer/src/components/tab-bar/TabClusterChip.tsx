@@ -66,7 +66,6 @@ export function TabClusterChip({
     cluster,
     groupId,
     isEditing,
-    onRename: openRename,
     dragListener: (event) => listeners?.onPointerDown?.(event)
   })
 

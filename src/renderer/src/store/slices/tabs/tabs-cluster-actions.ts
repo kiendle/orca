@@ -23,7 +23,6 @@ export function createTabsClusterActions(
   | 'renameTabCluster'
   | 'setTabClusterColor'
   | 'setTabClusterCollapsed'
-  | 'restoreTabClusterCollapseState'
   | 'ungroupTabCluster'
   | 'moveTabsInStrip'
   | 'moveTabCluster'
@@ -31,7 +30,7 @@ export function createTabsClusterActions(
   const patchCluster = (
     groupId: string,
     clusterId: string,
-    patch: Partial<Pick<TabCluster, 'name' | 'color' | 'collapsed' | 'shownTabId'>>
+    patch: Partial<Pick<TabCluster, 'name' | 'color' | 'collapsed'>>
   ): void => {
     set((state) => {
       const found = findGroupAndWorktree(state.groupsByWorktree, groupId)
@@ -39,19 +38,17 @@ export function createTabsClusterActions(
       if (!found || !cluster) {
         return state
       }
-      const restoresShownTabId = Object.hasOwn(patch, 'shownTabId')
       if (
         (patch.name === undefined || patch.name === cluster.name) &&
         (patch.color === undefined || patch.color === cluster.color) &&
-        (patch.collapsed === undefined || patch.collapsed === cluster.collapsed) &&
-        (!restoresShownTabId || patch.shownTabId === cluster.shownTabId)
+        (patch.collapsed === undefined || patch.collapsed === cluster.collapsed)
       ) {
         return state
       }
       const nextCluster = { ...cluster, ...patch }
       if (patch.collapsed !== undefined) {
         delete nextCluster.shownTabId
-        const shownTabId = restoresShownTabId ? patch.shownTabId : found.group.activeTabId
+        const shownTabId = found.group.activeTabId
         if (patch.collapsed && shownTabId && cluster.tabIds.includes(shownTabId)) {
           nextCluster.shownTabId = shownTabId
         }
@@ -171,11 +168,6 @@ export function createTabsClusterActions(
     },
     setTabClusterCollapsed: (groupId, clusterId, collapsed) =>
       patchCluster(groupId, clusterId, { collapsed }),
-    restoreTabClusterCollapseState: (groupId, clusterId, snapshot) =>
-      patchCluster(groupId, clusterId, {
-        collapsed: snapshot.collapsed,
-        shownTabId: snapshot.shownTabId
-      }),
 
     ungroupTabCluster: (groupId, clusterId) => {
       set((state) => {

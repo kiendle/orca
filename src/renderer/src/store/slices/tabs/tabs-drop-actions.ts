@@ -11,12 +11,12 @@ import {
   normalizeTabGroupClusters
 } from './tab-cluster-model'
 import { applyTabOrderSortValues } from './tabs-tab-order'
+import { pickTabCloseSuccessor } from './tab-close-successor'
 import {
   dedupeTabOrder,
   findGroupAndWorktree,
   findGroupForTab,
   findTabAndWorktree,
-  pickNextActiveTab,
   pushRecentTabId,
   sanitizeRecentTabIds
 } from '../tab-group-state'
@@ -114,11 +114,11 @@ export function moveTabsToPane(
             ...group,
             activeTabId:
               group.activeTabId && memberIds.has(group.activeTabId)
-                ? pickNextActiveTab(
+                ? pickTabCloseSuccessor(
+                    sourceGroup,
                     dedupedSourceGroupOrder.filter(
                       (id) => !memberIds.has(id) || id === group.activeTabId
                     ),
-                    sourceGroup.recentTabIds,
                     group.activeTabId
                   )
                 : group.activeTabId,

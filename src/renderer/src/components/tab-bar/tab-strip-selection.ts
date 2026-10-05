@@ -81,11 +81,9 @@ export function getTabClusterMenuTargets({
   clusters: readonly TabCluster[] | undefined
 }) {
   const selectedIds = new Set(selection?.tabIds.includes(tabId) ? selection.tabIds : [tabId])
-  const tabIds = tabOrder.filter((id) => selectedIds.has(id))
-  const groupableTabIds = tabIds.filter((id) => !pinnedTabIds.has(id))
+  const groupableTabIds = tabOrder.filter((id) => selectedIds.has(id) && !pinnedTabIds.has(id))
   const targetIds = new Set(groupableTabIds)
   return {
-    tabIds,
     groupableTabIds,
     hasClusterMembers:
       clusters?.some((cluster) => cluster.tabIds.some((id) => targetIds.has(id))) ?? false

@@ -2,12 +2,12 @@ import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contrac
 import { collapseGroupLayout } from './tabs-layout'
 import { buildActiveSurfacePatch } from './tabs-surface'
 import { applyTransferredTabClusterMembership } from './tab-cluster-model'
+import { pickTabCloseSuccessor } from './tab-close-successor'
 import {
   dedupeTabOrder,
   findGroupAndWorktree,
   findGroupForTab,
   findTabAndWorktree,
-  pickNextActiveTab,
   pushRecentTabId,
   sanitizeRecentTabIds
 } from '../tab-group-state'
@@ -37,7 +37,7 @@ export function createTabsMoveActions(
         moved = true
 
         const dedupedSourceGroupOrder = dedupeTabOrder(sourceGroup.tabOrder)
-        const sourceOrder = dedupeTabOrder(dedupedSourceGroupOrder.filter((id) => id !== tabId))
+        const sourceOrder = dedupedSourceGroupOrder.filter((id) => id !== tabId)
         // Why: defensive dedupe so target order can't grow a duplicate id (stale state); see dropUnifiedTab for the same guard.
         const targetOrder = dedupeTabOrder(targetGroup.tabOrder.filter((id) => id !== tabId))
         const targetIndex = Math.max(
@@ -65,8 +65,7 @@ export function createTabsMoveActions(
                 ...group,
                 activeTabId:
                   group.activeTabId === tabId
-                    ? // Why: keep MRU-aware selection so the user lands on their previously-focused tab, not a visual neighbor.
-                      pickNextActiveTab(dedupedSourceGroupOrder, sourceGroup.recentTabIds, tabId)
+                    ? pickTabCloseSuccessor(sourceGroup, dedupedSourceGroupOrder, tabId)
                     : group.activeTabId,
                 tabOrder: sourceOrder,
                 recentTabIds: sourceRecentTabIds

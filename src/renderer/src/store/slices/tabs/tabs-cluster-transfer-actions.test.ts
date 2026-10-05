@@ -118,6 +118,29 @@ describe('single-tab cluster drops', () => {
   })
 })
 
+it.each(['drop', 'move'])(
+  'keeps the visible MRU tab active after a collapsed sticky member leaves via %s',
+  (operation) => {
+    store.getState().setTabClusterCollapsed('source', SOURCE_CLUSTER.id, false)
+    store.getState().activateTab('tail')
+    store.getState().activateTab('s2')
+    store.getState().activateTab('s1')
+    store.getState().setTabClusterCollapsed('source', SOURCE_CLUSTER.id, true)
+    expect(pane('source').activeTabId).toBe('s1')
+    expect([...getHiddenClusterTabIds(pane('source'))]).toEqual(['s2'])
+
+    const moved =
+      operation === 'drop'
+        ? store.getState().dropUnifiedTab('s1', { groupId: 'target' })
+        : store.getState().moveUnifiedTabToGroup('s1', 'target', { activate: true })
+
+    expect(moved).toBe(true)
+    expect(pane('source').tabOrder).toEqual(['s2', 'tail'])
+    expect(pane('source').activeTabId).toBe('tail')
+    expect([...getHiddenClusterTabIds(pane('source'))]).toEqual(['s2'])
+  }
+)
+
 describe.each(['drop', 'move'] as const)('%s source cluster cleanup', (operation) => {
   function transfer(tabId: string, index: number): boolean {
     return operation === 'drop'

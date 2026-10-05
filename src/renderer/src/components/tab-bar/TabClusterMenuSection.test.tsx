@@ -71,7 +71,7 @@ describe('cluster grouping menu targets', () => {
         pinnedTabIds: new Set(),
         clusters: [CLUSTER]
       })
-    ).toEqual({ tabIds: ['b', 'c'], groupableTabIds: ['b', 'c'], hasClusterMembers: true })
+    ).toEqual({ groupableTabIds: ['b', 'c'], hasClusterMembers: true })
   })
 
   it('takes only the right-clicked tab when it is outside the highlighted selection', () => {
@@ -83,10 +83,10 @@ describe('cluster grouping menu targets', () => {
         pinnedTabIds: new Set(),
         clusters: [CLUSTER]
       })
-    ).toEqual({ tabIds: ['a'], groupableTabIds: ['a'], hasClusterMembers: false })
+    ).toEqual({ groupableTabIds: ['a'], hasClusterMembers: false })
   })
 
-  it('skips pinned tabs while preserving the multi-selection count', () => {
+  it('skips pinned tabs in a multi-selection', () => {
     expect(
       getTabClusterMenuTargets({
         tabId: 'b',
@@ -95,7 +95,7 @@ describe('cluster grouping menu targets', () => {
         pinnedTabIds: new Set(['a', 'b']),
         clusters: [CLUSTER]
       })
-    ).toEqual({ tabIds: ['a', 'b', 'c'], groupableTabIds: ['c'], hasClusterMembers: true })
+    ).toEqual({ groupableTabIds: ['c'], hasClusterMembers: true })
   })
 
   it('keeps a pinned-only target out of groups through the rendered menu', () => {
