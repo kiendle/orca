@@ -72,10 +72,7 @@ export function TabClusterContextMenu({
       </ContextMenuTrigger>
       <ContextMenuContent
         className={TAB_CONTEXT_MENU_CONTENT_CLASS}
-        onCloseAutoFocus={(event) => {
-          event.preventDefault()
-          clusterMenuAction.runAfterClose(event)
-        }}
+        onCloseAutoFocus={clusterMenuAction.runAfterClose}
       >
         <ContextMenuItem onSelect={() => clusterMenuAction.queueAfterClose(onRename)}>
           <Pencil className="size-3.5" />

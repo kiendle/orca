@@ -1,4 +1,5 @@
 import type { AppState } from '../types'
+import { getTabClusterInsertionIndex } from './tabs/tab-cluster-model'
 
 export type RecentlyClosedTabPosition = {
   tabBarIndex?: number
@@ -172,11 +173,11 @@ export function restoreRecentlyClosedTabPosition(
   if (!group) {
     return
   }
+  const remainingOrder = group.tabOrder.filter((tabId) => tabId !== unifiedTab.id)
   const cluster = position.clusterId
     ? group.tabClusters?.find((candidate) => candidate.id === position.clusterId)
     : undefined
   if (cluster) {
-    const remainingOrder = group.tabOrder.filter((tabId) => tabId !== unifiedTab.id)
     const start = remainingOrder.indexOf(cluster.tabIds[0])
     const end = remainingOrder.indexOf(cluster.tabIds.at(-1) ?? '') + 1
     // A moved cluster still owns the reopened tab even when its old index is elsewhere.
@@ -188,12 +189,12 @@ export function restoreRecentlyClosedTabPosition(
     return
   }
   if (typeof getState().reorderUnifiedTabs === 'function') {
-    getState().reorderUnifiedTabs(
-      group.id,
-      insertTabAtRecentlyClosedPosition(group.tabOrder, unifiedTab.id, {
-        tabBarIndex: position.groupIndex
-      }),
-      { recordInteraction: false }
+    const index = getTabClusterInsertionIndex(
+      remainingOrder,
+      group.tabClusters,
+      position.groupIndex
     )
+    remainingOrder.splice(index, 0, unifiedTab.id)
+    getState().reorderUnifiedTabs(group.id, remainingOrder, { recordInteraction: false })
   }
 }

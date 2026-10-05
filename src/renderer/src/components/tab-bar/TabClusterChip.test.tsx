@@ -257,6 +257,28 @@ describe('cluster chip presentation', () => {
 
 describe('cluster chip context menu dismissal', () => {
   it.each([
+    { label: 'named', name: 'Work' },
+    { label: 'unnamed', name: '' }
+  ])(
+    'returns focus to the $label chip when Escape dismisses a keyboard-opened menu',
+    async ({ name }) => {
+      mount({ ...CLUSTER, name })
+      const chip = screen.getByRole('button', { name: name || 'Unnamed group' })
+      act(() => chip.focus())
+      fireEvent.keyDown(chip, { key: 'ContextMenu' })
+      // Why: happy-dom does not dispatch contextmenu for keyboard shortcuts.
+      fireEvent.contextMenu(chip, { button: 0 })
+      const menu = await screen.findByRole('menu')
+      await waitFor(() => expect(menu.contains(document.activeElement)).toBe(true))
+      fireEvent.keyDown(menu, { key: 'Escape' })
+      await waitFor(() => {
+        expect(screen.queryByRole('menu')).toBeNull()
+        expect(document.activeElement).toBe(chip)
+      })
+    }
+  )
+
+  it.each([
     { label: 'close-all-context-menus', eventType: CLOSE_ALL_CONTEXT_MENUS_EVENT },
     { label: 'window blur', eventType: 'blur' }
   ])('closes on $label and can reopen on right-click', async ({ eventType }) => {

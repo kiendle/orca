@@ -7,6 +7,7 @@ import { buildActiveSurfacePatch } from './tabs-surface'
 import { promoteClusterPreviewTabs } from './tabs-cluster-strip-actions'
 import {
   applyTransferredTabClusterMembership,
+  getTabClusterInsertionIndex,
   mergeTabClusterRecords,
   normalizeTabGroupClusters
 } from './tab-cluster-model'
@@ -95,9 +96,15 @@ export function moveTabsToPane(
     const destinationGroup =
       nextGroups.find((group) => group.id === resolvedTargetGroupId) ?? targetGroup
     const targetOrder = dedupeTabOrder(destinationGroup.tabOrder.filter((id) => !memberIds.has(id)))
-    const targetIndex = Math.max(
-      0,
-      Math.min(target.index ?? targetOrder.length, targetOrder.length)
+    const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+    const pinnedTabIds = new Set(tabs.filter((tab) => tab.isPinned).map((tab) => tab.id))
+    const targetIndex = getTabClusterInsertionIndex(
+      targetOrder,
+      destinationGroup.tabClusters,
+      target.index ?? targetOrder.length,
+      !isSplitDrop && !carriedCluster && tabIds.every((id) => !pinnedTabIds.has(id))
+        ? target.clusterId
+        : null
     )
     targetOrder.splice(targetIndex, 0, ...tabIds)
     const activeTabId =
@@ -105,8 +112,6 @@ export function moveTabsToPane(
         ? sourceGroup.activeTabId
         : tabIds[0]
     const sourceRecentTabIds = sanitizeRecentTabIds(sourceGroup.recentTabIds, sourceOrder)
-    const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
-    const pinnedTabIds = new Set(tabs.filter((tab) => tab.isPinned).map((tab) => tab.id))
     nextGroups = nextGroups.map((group) => {
       if (group.id === sourceGroupId) {
         return applyTransferredTabClusterMembership(

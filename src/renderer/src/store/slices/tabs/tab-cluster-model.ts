@@ -116,6 +116,27 @@ export function getTabClusterForTab(
   return clusters?.find((cluster) => cluster.tabIds.includes(tabId)) ?? null
 }
 
+export function getTabClusterInsertionIndex(
+  tabOrder: readonly string[],
+  clusters: readonly TabCluster[] | undefined,
+  index: number,
+  joiningClusterId?: string | null
+): number {
+  const insertionIndex = Math.max(0, Math.min(index, tabOrder.length))
+  for (const cluster of clusters ?? []) {
+    if (cluster.id === joiningClusterId) {
+      continue
+    }
+    const start = tabOrder.indexOf(cluster.tabIds[0])
+    const end = tabOrder.indexOf(cluster.tabIds.at(-1) ?? '') + 1
+    if (start !== -1 && insertionIndex > start && insertionIndex < end) {
+      // Why: the nearest edge preserves nonmembership with minimal displacement; ties go before.
+      return insertionIndex - start <= end - insertionIndex ? start : end
+    }
+  }
+  return insertionIndex
+}
+
 export function getHiddenClusterTabIds(
   group: Pick<TabGroup, 'tabClusters' | 'activeTabId'>
 ): ReadonlySet<string> {

@@ -100,6 +100,20 @@ describe('single-tab cluster drops', () => {
     }
   })
 
+  it('places a pinned cross-pane drop before the nearest cluster edge without clipping members', () => {
+    store.getState().pinTab('tail')
+    expect(
+      store
+        .getState()
+        .dropUnifiedTab('tail', { groupId: 'target', index: 2, clusterId: TARGET_CLUSTER.id })
+    ).toBe(true)
+    expect(pane('source').tabOrder).toEqual(['s1', 's2'])
+    expect(pane('source').tabClusters).toEqual([SOURCE_CLUSTER])
+    expect(pane('target').tabOrder).toEqual(['before', 'tail', 'a', 'b', 'c', 'after'])
+    expect(pane('target').tabClusters).toEqual([TARGET_CLUSTER])
+    expect(store.getState().getTab('tail')?.isPinned).toBe(true)
+  })
+
   it('drops the sticky state when its member moves alone into a different cluster', () => {
     store.getState().setTabClusterCollapsed('source', SOURCE_CLUSTER.id, false)
     store.getState().setTabClusterCollapsed('source', SOURCE_CLUSTER.id, true)

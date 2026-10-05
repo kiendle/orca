@@ -144,4 +144,53 @@ describe('reopening closed cluster members', () => {
     expect(pane?.tabOrder).toEqual([anchorTabId, restored.id, outsideTabId])
     expect(pane?.tabClusters).toBeUndefined()
   })
+
+  it('stays ungrouped when its captured index falls inside an unrelated moved cluster', () => {
+    const store = createTestStore()
+    seedStore(store, {
+      activeWorktreeId: WT,
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+    const terminals = Array.from({ length: 4 }, () => store.getState().createTab(WT))
+    const group = store.getState().groupsByWorktree[WT]?.[0]
+    if (!group) {
+      throw new Error('Expected one fixture pane')
+    }
+    const [a, b, c, d] = group.tabOrder
+    const capturedClusterId = store.getState().createTabCluster(group.id, [a, b])
+    const unrelatedClusterId = store.getState().createTabCluster(group.id, [c, d], {
+      name: 'Other',
+      color: 'pink'
+    })
+    if (!capturedClusterId || !unrelatedClusterId) {
+      throw new Error('Expected both fixture clusters')
+    }
+    store.getState().closeTab(terminals[1].id)
+    expect(store.getState().recentlyClosedTerminalTabsByWorktree[WT]?.[0]?.position).toMatchObject({
+      groupId: group.id,
+      groupIndex: 1,
+      clusterId: capturedClusterId
+    })
+    store.getState().ungroupTabCluster(group.id, capturedClusterId)
+    store.getState().moveTabsInStrip(group.id, [c, d], { index: 0, clusterId: unrelatedClusterId })
+    expect(store.getState().groupsByWorktree[WT]?.[0]?.tabOrder).toEqual([c, d, a])
+    expect(store.getState().reopenClosedTab(WT)).toBe(true)
+    const restored = store.getState().getActiveTab(WT)
+    if (!restored) {
+      throw new Error('Expected an activated reopened tab')
+    }
+    const pane = store.getState().groupsByWorktree[WT].find((item) => item.id === group.id)
+    expect(pane?.tabOrder).toEqual([restored.id, c, d, a])
+    expect(pane?.tabClusters).toEqual([
+      {
+        id: unrelatedClusterId,
+        name: 'Other',
+        color: 'pink',
+        collapsed: false,
+        tabIds: [c, d]
+      }
+    ])
+  })
 })

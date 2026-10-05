@@ -13,7 +13,8 @@ vi.mock('react', async () => {
     },
     useCallback<T extends (...args: never[]) => unknown>(callback: T) {
       return callback
-    }
+    },
+    useEffect() {}
   }
 })
 

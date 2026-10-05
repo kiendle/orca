@@ -145,16 +145,12 @@ export function TabClusterChip({
       onClose={onClose}
     >
       <div data-tab-strip-slot={sortableId} className="flex h-full shrink-0">
-        {!cluster.name && !rename.isEditing && !menuOpen ? (
-          <Tooltip>
-            <TooltipTrigger asChild>{chip}</TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
-              {translate('components.tabCluster.unnamed', 'Unnamed group')}
-            </TooltipContent>
-          </Tooltip>
-        ) : (
-          chip
-        )}
+        <Tooltip open={!cluster.name && !rename.isEditing && !menuOpen ? undefined : false}>
+          <TooltipTrigger asChild>{chip}</TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            {translate('components.tabCluster.unnamed', 'Unnamed group')}
+          </TooltipContent>
+        </Tooltip>
       </div>
     </TabClusterContextMenu>
   )
