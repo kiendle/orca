@@ -3,8 +3,7 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { dedupeTabOrder } from '@/store/slices/tab-group-state'
-import { getHiddenClusterTabIds } from '@/store/slices/tabs/tab-cluster-model'
-import type { Tab } from '../../../shared/tab-types'
+import { getHiddenClusterTabIds, type Tab } from '../../../shared/tab-types'
 import {
   activateWebRuntimeSessionTab,
   isWebRuntimeSessionActive

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const { getStateMock } = vi.hoisted(() => ({ getStateMock: vi.fn() }))
 vi.mock('@/store', () => ({ useAppStore: { getState: getStateMock } }))
 
-import type { TabGroup } from '../../../../../shared/tab-types'
+import { getHiddenClusterTabIds, type TabGroup } from '../../../../../shared/tab-types'
 import {
   createTestStore,
   makeOpenFile,
@@ -13,7 +13,6 @@ import {
   type TestStore
 } from '../store-test-helpers'
 import { createTabsSliceMockApi } from '../tabs-slice-test-harness'
-import { getHiddenClusterTabIds } from './tab-cluster-model'
 import { handleSwitchRecentTab } from '@/hooks/ipc-tab-switch'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))

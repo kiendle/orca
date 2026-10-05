@@ -1,11 +1,8 @@
 import { useCallback, useState } from 'react'
 import type { DragEndEvent, DragMoveEvent, DragOverEvent } from '@dnd-kit/core'
-import type { TabGroup } from '../../../../shared/tab-types'
+import { getHiddenClusterTabIds, type TabGroup } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
-import {
-  getHiddenClusterTabIds,
-  getTabClusterForTab
-} from '../../store/slices/tabs/tab-cluster-model'
+import { getTabClusterForTab } from '../../store/slices/tabs/tab-cluster-model'
 import {
   getTabClusterSortableId,
   isTabClusterDragData,

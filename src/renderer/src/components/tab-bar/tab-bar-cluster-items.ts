@@ -1,5 +1,8 @@
-import type { TabCluster, TabGroup } from '../../../../shared/tab-types'
-import { getHiddenClusterTabIds } from '@/store/slices/tabs/tab-cluster-model'
+import {
+  getHiddenClusterTabIds,
+  type TabCluster,
+  type TabGroup
+} from '../../../../shared/tab-types'
 import { getTabClusterSortableId } from '../tab-group/tab-drag-data'
 import type { TabBarItem } from './tab-bar-item-model'
 

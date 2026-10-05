@@ -1,7 +1,8 @@
 import type { TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
-import { pushRecentTabId, sanitizeRecentTabIds } from '../store/slices/tab-group-state'
+import { pushRecentTabId } from '../../../shared/tab-group-history'
+import { sanitizeRecentTabIds } from '../store/slices/tab-group-state'
 import { rekeyTabClusterMembers } from '../store/slices/tabs/tab-cluster-model'
-import { pickTabCloseSuccessor } from '../store/slices/tabs/tab-close-successor'
+import { pickTabCloseSuccessor } from '../../../shared/tab-close-successor'
 
 /** A snapshot tab the client has not placed yet, plus the group it should join. */
 export type ClientOwnedAdoptedTab = {

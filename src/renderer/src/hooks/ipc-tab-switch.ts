@@ -7,7 +7,7 @@ import {
   type TypeCyclableTab
 } from '@/components/terminal/tab-type-cycle'
 import { sanitizeRecentTabIds } from '../store/slices/tab-group-state'
-import { getHiddenClusterTabIds } from '../store/slices/tabs/tab-cluster-model'
+import { getHiddenClusterTabIds } from '../../../shared/tab-types'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 

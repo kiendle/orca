@@ -1,6 +1,7 @@
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getActiveExecutionHostIdForWorktree } from '@/lib/unified-tab-host-ownership'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
+import { pushRecentTabId } from '../../../../../shared/tab-group-history'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { buildActiveSurfacePatch } from './tabs-surface'
 import { buildSplitNode, replaceLeaf } from './tabs-layout'
@@ -8,7 +9,6 @@ import {
   dedupeTabOrder,
   ensureGroup,
   findGroupForTab,
-  pushRecentTabId,
   sanitizeRecentTabIds,
   updateGroup
 } from '../tab-group-state'

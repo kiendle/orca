@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { TabCluster } from '../../../../../shared/tab-types'
+import { getHiddenClusterTabIds, type TabCluster } from '../../../../../shared/tab-types'
 import {
-  getHiddenClusterTabIds,
   getTabClusterForTab,
   isTabClusterColor,
   mergeTabClusterRecords,

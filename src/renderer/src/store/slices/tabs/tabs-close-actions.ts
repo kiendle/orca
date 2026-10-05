@@ -1,10 +1,10 @@
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
+import { pushRecentTabId } from '../../../../../shared/tab-group-history'
 import { collapseGroupLayout } from './tabs-layout'
 import {
   dedupeTabOrder,
   findGroupForTab,
   findTabAndWorktree,
-  pushRecentTabId,
   sanitizeRecentTabIds
 } from '../tab-group-state'
 import { buildActiveSurfacePatch } from './tabs-surface'
@@ -15,7 +15,7 @@ import {
 } from '@/lib/structured-agent-session-launch-registry'
 import { structuredAgentSessionTabId } from '../../../../../shared/structured-agent-session-projection'
 import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-focus-intent'
-import { pickTabCloseSuccessor } from './tab-close-successor'
+import { pickTabCloseSuccessor } from '../../../../../shared/tab-close-successor'
 import {
   structuredAgentSessionFocusOwner,
   structuredAgentSessionTargetForTab

@@ -13,7 +13,7 @@ import {
   seedStore,
   type TestStore
 } from '../store/slices/store-test-helpers'
-import { getHiddenClusterTabIds } from '../store/slices/tabs/tab-cluster-model'
+import { getHiddenClusterTabIds } from '../../../shared/tab-types'
 import {
   activateCyclableTab,
   handleSwitchRecentTab,

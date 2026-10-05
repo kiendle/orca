@@ -1,6 +1,6 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { BrowserTab } from '../../../shared/browser-workspace-types'
-import type { TabGroup } from '../../../shared/tab-types'
+import { getHiddenClusterTabIds, type TabGroup } from '../../../shared/tab-types'
 import { getGroupVisibleTabOrder } from '@/components/tab-bar/group-tab-order'
 import {
   getNextTabAcrossAllTypes,
@@ -9,7 +9,6 @@ import {
   type TypeCyclableTab
 } from '@/components/terminal/tab-type-cycle'
 import type { AppState } from '@/store/types'
-import { getHiddenClusterTabIds } from '@/store/slices/tabs/tab-cluster-model'
 import { resolveBrowserWorkspaceOwner } from './browser-workspace-source-resolution'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from './floating-terminal'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'

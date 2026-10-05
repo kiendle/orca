@@ -1,14 +1,14 @@
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
+import { pushRecentTabId } from '../../../../../shared/tab-group-history'
 import { collapseGroupLayout } from './tabs-layout'
 import { buildActiveSurfacePatch } from './tabs-surface'
 import { applyTransferredTabClusterMembership } from './tab-cluster-model'
-import { pickTabCloseSuccessor } from './tab-close-successor'
+import { pickTabCloseSuccessor } from '../../../../../shared/tab-close-successor'
 import {
   dedupeTabOrder,
   findGroupAndWorktree,
   findGroupForTab,
   findTabAndWorktree,
-  pushRecentTabId,
   sanitizeRecentTabIds
 } from '../tab-group-state'
 

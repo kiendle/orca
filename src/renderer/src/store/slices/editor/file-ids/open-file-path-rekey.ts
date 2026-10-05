@@ -1,8 +1,9 @@
 import type { AppState } from '../../../types'
 import type { TabGroup } from '../../../../../../shared/tab-types'
+import { pushRecentTabId } from '../../../../../../shared/tab-group-history'
 import { pruneTabGroupLayoutForGroups } from '../../tabs-hydration'
-import { pushRecentTabId, sanitizeRecentTabIds } from '../../tab-group-state'
-import { pickTabCloseSuccessor } from '../../tabs/tab-close-successor'
+import { sanitizeRecentTabIds } from '../../tab-group-state'
+import { pickTabCloseSuccessor } from '../../../../../../shared/tab-close-successor'
 
 export function rekeyFileIdRecord<T>(
   record: Record<string, T>,

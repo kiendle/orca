@@ -137,23 +137,6 @@ export function getTabClusterInsertionIndex(
   return insertionIndex
 }
 
-export function getHiddenClusterTabIds(
-  group: Pick<TabGroup, 'tabClusters' | 'activeTabId'>
-): ReadonlySet<string> {
-  const hidden = new Set<string>()
-  for (const cluster of group.tabClusters ?? []) {
-    if (!cluster.collapsed) {
-      continue
-    }
-    for (const id of cluster.tabIds) {
-      if (id !== group.activeTabId && id !== cluster.shownTabId) {
-        hidden.add(id)
-      }
-    }
-  }
-  return hidden
-}
-
 export function rekeyTabClusterMembers(
   clusters: readonly TabCluster[] | undefined,
   rekey: ReadonlyMap<string, string>

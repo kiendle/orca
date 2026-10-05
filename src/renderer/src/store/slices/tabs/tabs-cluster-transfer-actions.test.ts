@@ -1,10 +1,13 @@
 import type { StoreApi, UseBoundStore } from 'zustand'
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { TabCluster, TabGroup } from '../../../../../shared/tab-types'
+import {
+  getHiddenClusterTabIds,
+  type TabCluster,
+  type TabGroup
+} from '../../../../../shared/tab-types'
 import type { AppState } from '../../types'
 import { createTestStore, makeTabGroup, makeUnifiedTab, seedStore } from '../store-test-helpers'
 import { createTabsSliceMockApi } from '../tabs-slice-test-harness'
-import { getHiddenClusterTabIds } from './tab-cluster-model'
 
 createTabsSliceMockApi()
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Tab, TabGroup } from '../../../shared/tab-types'
+import { getHiddenClusterTabIds, type Tab, type TabGroup } from '../../../shared/tab-types'
 import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
 import type { AppState } from '@/store/types'
 import {
@@ -12,7 +12,6 @@ import {
   seedStore,
   TEST_REPO
 } from '../store/slices/store-test-helpers'
-import { getHiddenClusterTabIds } from '../store/slices/tabs/tab-cluster-model'
 import { activateTabNumberShortcut, resolveTabNumberShortcutTarget } from './tab-number-shortcuts'
 
 const { getStateMock } = vi.hoisted(() => ({ getStateMock: vi.fn<() => AppState>() }))

@@ -9,7 +9,7 @@ import {
   seedStore
 } from './store-test-helpers'
 import { carryRestoredEditorTabClusters } from './editor/actions/restored-editor-tab-clusters'
-import { getHiddenClusterTabIds } from './tabs/tab-cluster-model'
+import { getHiddenClusterTabIds } from '../../../../shared/tab-types'
 
 const SOURCE = 'repo1::/path/source'
 const TARGET = 'repo1::/path/target'

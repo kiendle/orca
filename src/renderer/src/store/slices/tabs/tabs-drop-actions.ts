@@ -1,5 +1,6 @@
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { TabCluster, TabGroup } from '../../../../../shared/tab-types'
+import { pushRecentTabId } from '../../../../../shared/tab-group-history'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { isPaneColumnSplitDropNoOp } from '../pane-column-split-drop-no-op'
 import { collapseGroupLayout, buildSplitNode, replaceLeaf } from './tabs-layout'
@@ -12,13 +13,12 @@ import {
   normalizeTabGroupClusters
 } from './tab-cluster-model'
 import { applyTabOrderSortValues } from './tabs-tab-order'
-import { pickTabCloseSuccessor } from './tab-close-successor'
+import { pickTabCloseSuccessor } from '../../../../../shared/tab-close-successor'
 import {
   dedupeTabOrder,
   findGroupAndWorktree,
   findGroupForTab,
   findTabAndWorktree,
-  pushRecentTabId,
   sanitizeRecentTabIds
 } from '../tab-group-state'
 
