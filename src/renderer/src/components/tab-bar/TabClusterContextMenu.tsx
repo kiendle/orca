@@ -30,7 +30,7 @@ import { getTabClusterSplitBlocker } from '../tab-group/tab-cluster-split-availa
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { TAB_CLUSTER_COLOR_CLASSES, TAB_CLUSTER_COLOR_LABELS } from './tab-cluster-colors'
 import { useTabClusterMenuCloseAction } from './use-tab-cluster-menu-close-action'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 
 export function TabClusterContextMenu({
   cluster,

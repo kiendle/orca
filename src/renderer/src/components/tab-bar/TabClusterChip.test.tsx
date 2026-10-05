@@ -14,7 +14,7 @@ import {
   seedStore,
   type TestStore
 } from '@/store/slices/store-test-helpers'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import { createFloatingTerminalPanelDragActions } from '../floating-terminal/floating-terminal-panel-drag-actions'
 
 let store: TestStore
@@ -32,7 +32,6 @@ vi.mock('@dnd-kit/sortable', () => ({
     setNodeRef: () => {}
   })
 }))
-vi.mock('./SortableTab', () => ({ CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca-close-all-context-menus' }))
 vi.mock('../tab-group/useTabDragSplit', () => ({ TAB_DRAG_ACTIVATION_DISTANCE_PX: 5 }))
 
 const CLUSTER: TabCluster = {
