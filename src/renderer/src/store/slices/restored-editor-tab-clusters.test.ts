@@ -9,6 +9,7 @@ import {
   seedStore
 } from './store-test-helpers'
 import { carryRestoredEditorTabClusters } from './editor/actions/restored-editor-tab-clusters'
+import { getHiddenClusterTabIds } from './tabs/tab-cluster-model'
 
 const SOURCE = 'repo1::/path/source'
 const TARGET = 'repo1::/path/target'
@@ -121,6 +122,75 @@ describe('restored editor cluster ownership', () => {
     expect(carried?.color).toBe('blue')
     expect(carried?.id).not.toBe('cluster')
     expect(store.getState().getTab(result.fileId)?.worktreeId).toBe(TARGET)
+  })
+
+  it('keeps the source pane on its visible MRU successor and records the visit', () => {
+    const store = createTestStore()
+    const ids = [OLD, 'hidden-member', 'visible-sibling']
+    seedStore(store, {
+      activeWorktreeId: SOURCE,
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: SOURCE, repoId: 'repo1', path: '/path/source' }),
+          makeWorktree({ id: TARGET, repoId: 'repo1', path: '/path/target' })
+        ]
+      },
+      openFiles: [
+        makeOpenFile({ id: OLD, worktreeId: SOURCE, filePath: '/path/target/a.md' }),
+        ...ids.slice(1).map((id) => makeOpenFile({ id, worktreeId: SOURCE }))
+      ],
+      unifiedTabsByWorktree: {
+        [SOURCE]: ids.map((id) =>
+          makeUnifiedTab({ id, worktreeId: SOURCE, groupId: 'source-pane', contentType: 'editor' })
+        )
+      },
+      groupsByWorktree: {
+        [SOURCE]: [
+          makeTabGroup({
+            id: 'source-pane',
+            worktreeId: SOURCE,
+            activeTabId: OLD,
+            tabOrder: ids,
+            tabClusters: [
+              {
+                id: 'cluster',
+                name: 'Work',
+                color: 'blue',
+                collapsed: false,
+                tabIds: [OLD, 'hidden-member']
+              }
+            ]
+          })
+        ]
+      },
+      activeGroupIdByWorktree: { [SOURCE]: 'source-pane' },
+      layoutByWorktree: { [SOURCE]: { type: 'leaf', groupId: 'source-pane' } }
+    })
+    store.getState().activateTab('visible-sibling')
+    store.getState().activateTab('hidden-member')
+    store.getState().activateTab(OLD)
+    store.getState().setTabClusterCollapsed('source-pane', 'cluster', true)
+
+    const result = store.getState().reparentRestoredEditorFileOwner({
+      fileId: OLD,
+      targetWorktreeId: TARGET,
+      targetRelativePath: 'a.md',
+      targetExecutionHostId: 'local',
+      targetRuntimeEnvironmentId: null,
+      targetOperationProvenance: captureEditorFileOperationProvenance(
+        store.getState(),
+        TARGET,
+        null,
+        true
+      )
+    })
+    expect(result.ok).toBe(true)
+    const source = store.getState().groupsByWorktree[SOURCE][0]
+    expect(source.tabOrder).toEqual(['hidden-member', 'visible-sibling'])
+    expect(source.activeTabId).toBe('visible-sibling')
+    expect(source.recentTabIds).toEqual(['hidden-member', 'visible-sibling'])
+    expect([...getHiddenClusterTabIds(source)]).toEqual(['hidden-member'])
+    expect(source.tabClusters?.[0].collapsed).toBe(true)
   })
 
   it('gives a partially transferred cluster its own chip identity even without a target collision', () => {
