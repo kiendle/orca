@@ -2,7 +2,10 @@ import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contrac
 import { pushRecentTabId } from '../../../../../shared/tab-group-history'
 import { collapseGroupLayout } from './tabs-layout'
 import { buildActiveSurfacePatch } from './tabs-surface'
-import { applyTransferredTabClusterMembership } from './tab-cluster-model'
+import {
+  applyTransferredTabClusterMembership,
+  getTabClusterInsertionIndex
+} from './tab-cluster-model'
 import { pickTabCloseSuccessor } from '../../../../../shared/tab-close-successor'
 import {
   dedupeTabOrder,
@@ -40,9 +43,10 @@ export function createTabsMoveActions(
         const sourceOrder = dedupedSourceGroupOrder.filter((id) => id !== tabId)
         // Why: defensive dedupe so target order can't grow a duplicate id (stale state); see dropUnifiedTab for the same guard.
         const targetOrder = dedupeTabOrder(targetGroup.tabOrder.filter((id) => id !== tabId))
-        const targetIndex = Math.max(
-          0,
-          Math.min(opts?.index ?? targetOrder.length, targetOrder.length)
+        const targetIndex = getTabClusterInsertionIndex(
+          targetOrder,
+          targetGroup.tabClusters,
+          opts?.index ?? targetOrder.length
         )
         targetOrder.splice(targetIndex, 0, tabId)
         const nextActiveGroupIdByWorktree = {

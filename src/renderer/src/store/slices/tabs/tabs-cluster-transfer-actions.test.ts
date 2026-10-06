@@ -172,6 +172,15 @@ describe.each(['drop', 'move'] as const)('%s source cluster cleanup', (operation
     expect(pane('source').tabClusters?.[0].tabIds).toEqual(['s1'])
   })
 
+  it.each([
+    { index: 2, edge: 1 },
+    { index: 3, edge: 4 }
+  ])('moves a nonmember aimed at interior index $index to the group edge', ({ index, edge }) => {
+    expect(transfer('s2', index)).toBe(true)
+    expect(pane('target').tabClusters).toEqual([TARGET_CLUSTER])
+    expect(pane('target').tabOrder[edge]).toBe('s2')
+  })
+
   it('removes the final source member without carrying its cluster record', () => {
     transfer('s2', 1)
     transfer('s1', 1)

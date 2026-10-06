@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { pickNextActiveTab } from './tab-close-successor'
+import { pickNextActiveTab, pickTabCloseSuccessor } from './tab-close-successor'
+import type { TabGroup } from './tab-types'
 
 describe('pickNextActiveTab', () => {
   it('returns the most-recent non-closing id', () => {
@@ -17,5 +18,16 @@ describe('pickNextActiveTab', () => {
 
   it('falls back to left neighbor when closing the rightmost and MRU is empty', () => {
     expect(pickNextActiveTab(['a', 'b', 'c'], undefined, 'c')).toBe('b')
+  })
+})
+
+describe('pickTabCloseSuccessor', () => {
+  it('reveals the only hidden survivor even when a legacy order repeats the closing id', () => {
+    const group: Pick<TabGroup, 'activeTabId' | 'recentTabIds' | 'tabClusters'> = {
+      activeTabId: 'a',
+      recentTabIds: [],
+      tabClusters: [{ id: 'c', name: '', color: 'blue', collapsed: true, tabIds: ['a', 'b'] }]
+    }
+    expect(pickTabCloseSuccessor(group, ['a', 'a', 'b'], 'a')).toBe('b')
   })
 })

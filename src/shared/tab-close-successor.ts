@@ -54,7 +54,7 @@ export function pickTabCloseSuccessor(
     ? tabOrder.filter((tabId) => !hiddenTabIds.has(tabId))
     : tabOrder
   return pickNextActiveTab(
-    visibleOrder.length > 1 ? visibleOrder : tabOrder,
+    visibleOrder.some((tabId) => tabId !== closingTabId) ? visibleOrder : tabOrder,
     group.recentTabIds,
     closingTabId
   )
