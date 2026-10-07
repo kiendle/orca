@@ -130,15 +130,10 @@ export function TabClusterContextMenu({
               </ContextMenuItem>
             </TooltipTrigger>
             <TooltipContent side="right" sideOffset={8} className="z-[80] max-w-64">
-              {splitBlocker === 'remote-server'
-                ? translate(
-                    'components.tabCluster.moveToSplitUnavailableRemote',
-                    'Not available for workspaces on a remote Orca server. Drag the group into an existing split instead.'
-                  )
-                : translate(
-                    'components.tabCluster.moveToSplitUnavailableFloating',
-                    'Not available in the floating terminal panel.'
-                  )}
+              {translate(
+                'components.tabCluster.moveToSplitUnavailableRemote',
+                'Not available for workspaces on a remote Orca server. Drag the group into an existing split instead.'
+              )}
             </TooltipContent>
           </Tooltip>
         ) : (

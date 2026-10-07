@@ -169,6 +169,50 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
+  it("keeps a launch pane's state for the tab's life, and drops a malformed one", () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {
+        wt: [
+          {
+            id: 'tab1',
+            ptyId: null,
+            worktreeId: 'wt',
+            title: 'claude',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            launchAgent: 'claude',
+            agentLaunchPane: { leafId: 'leaf-1', outcome: { kind: 'not-started', code: 'boom' } }
+          },
+          {
+            id: 'tab2',
+            ptyId: null,
+            worktreeId: 'wt',
+            title: 'claude',
+            customTitle: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 1,
+            agentLaunchPane: { leafId: 'leaf-2', outcome: { kind: 'exploded' } }
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {}
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree.wt[0].agentLaunchPane).toEqual({
+        leafId: 'leaf-1',
+        outcome: { kind: 'not-started', code: 'boom' }
+      })
+      expect(result.value.tabsByWorktree.wt[1].agentLaunchPane).toBeUndefined()
+    }
+  })
+
   it('drops an unknown launchAgent without failing the whole session', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
@@ -608,6 +652,46 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
+  it('keeps a chat tab of any agent id, and drops only a malformed id', () => {
+    const chatTab = (id: string, agentSessionAgent: unknown) => ({
+      id,
+      entityId: id,
+      groupId: 'group1',
+      worktreeId: 'wt',
+      contentType: 'agent-session',
+      agentSessionAgent,
+      label: 'Chat',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0
+    })
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      unifiedTabs: {
+        wt: [
+          chatTab('a', 'grok'),
+          chatTab('b', 'not an agent!'),
+          chatTab('c', 42),
+          chatTab('d', 'claude')
+        ]
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.unifiedTabs?.wt.map((tab) => [tab.id, tab.agentSessionAgent])).toEqual([
+        ['a', 'grok'],
+        ['b', undefined],
+        ['c', undefined],
+        ['d', 'claude']
+      ])
+    }
+  })
+
   it('degrades an unknown viewMode to the safe default instead of failing parse', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
@@ -715,69 +799,5 @@ describe('parseWorkspaceSession', () => {
       expect(page?.remoteBrowserPageId).toBeUndefined()
       expect(page?.remoteBrowserPageClientHosted).toBeUndefined()
     }
-  })
-
-  it('preserves clusters and falls back to grey for an unknown color', () => {
-    const result = parseWorkspaceSession({
-      activeRepoId: null,
-      activeWorktreeId: null,
-      activeTabId: null,
-      tabsByWorktree: {},
-      terminalLayoutsByTabId: {},
-      tabGroups: {
-        wt: [
-          {
-            id: 'pane',
-            worktreeId: 'wt',
-            activeTabId: 'a',
-            tabOrder: ['a'],
-            tabClusters: [
-              { id: 'cluster', name: 'Work', color: 'future-color', collapsed: true, tabIds: ['a'] }
-            ]
-          }
-        ]
-      }
-    })
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      throw new Error('expected a valid session')
-    }
-    expect(result.value.tabGroups?.wt[0].tabClusters).toEqual([
-      { id: 'cluster', name: 'Work', color: 'grey', collapsed: true, tabIds: ['a'] }
-    ])
-  })
-
-  it.each([
-    { tabClusters: 'broken' },
-    { tabClusters: [{ id: 1, name: '', color: 'blue', collapsed: false, tabIds: ['a'] }] },
-    { tabClusters: [{ id: 'c', name: null, color: 'blue', collapsed: false, tabIds: ['a'] }] },
-    { tabClusters: [{ id: 'c', name: '', color: 'blue', collapsed: 'yes', tabIds: ['a'] }] },
-    { tabClusters: [{ id: 'c', name: '', color: 'blue', collapsed: false, tabIds: [1] }] }
-  ])('drops corrupt cluster metadata without dropping its pane: %j', ({ tabClusters }) => {
-    const result = parseWorkspaceSession({
-      activeRepoId: null,
-      activeWorktreeId: null,
-      activeTabId: null,
-      tabsByWorktree: {},
-      terminalLayoutsByTabId: {},
-      tabGroups: {
-        wt: [
-          {
-            id: 'pane',
-            worktreeId: 'wt',
-            activeTabId: 'a',
-            tabOrder: ['a'],
-            tabClusters
-          }
-        ]
-      }
-    })
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      throw new Error('expected a salvaged session')
-    }
-    expect(result.value.tabGroups?.wt).toEqual([
-      { id: 'pane', worktreeId: 'wt', activeTabId: 'a', tabOrder: ['a'], tabClusters: undefined }
-    ])
   })
 })

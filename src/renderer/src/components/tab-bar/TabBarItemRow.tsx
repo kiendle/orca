@@ -4,8 +4,7 @@ import { shallow } from 'zustand/shallow'
 import type { GitFileStatus } from '../../../../shared/git-status-types'
 import type { TabClusterColor } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { OpenFile } from '../../store/slices/editor'
 import SortableTab from './SortableTab'
 import EditorFileTab from './EditorFileTab'
@@ -15,6 +14,7 @@ import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { getTabDragLabel, resolveTerminalItemTab, type TabBarItem } from './tab-bar-item-model'
 import type { TabBarItemActions } from './use-tab-bar-item-actions'
 import type { TabStripActivationModifiers } from './tab-strip-selection'
+import { useStructuredChatTabConversationName } from '@/runtime/structured-conversation-name'
 
 // Why only values and `actions`: anything a tab draws must be a compared prop, or a skipped render shows it stale.
 type TabBarItemRowProps = {
@@ -65,6 +65,9 @@ function TabBarItemRow({
 }: TabBarItemRowProps): React.JSX.Element {
   // Why: the tabs' labels come from `translate()`, which a skipped render would leave in the old language.
   useTranslation()
+  const conversationName = useStructuredChatTabConversationName(
+    item.type === 'agent-session' ? item.data : undefined
+  )
   const dragData: TabDragItemData = {
     kind: 'tab',
     worktreeId,
@@ -121,13 +124,13 @@ function TabBarItemRow({
       id: item.id,
       ptyId: null,
       worktreeId,
-      title: item.data.label,
+      title: conversationName ?? item.data.label,
       customTitle: item.data.customLabel,
       color: item.data.color,
       sortOrder: item.data.sortOrder,
       createdAt: item.data.createdAt,
-      ...(isAgentSessionHandleProvider(item.data.agentSessionAgent)
-        ? { launchAgent: item.data.agentSessionAgent as TuiAgent }
+      ...(isTuiAgent(item.data.agentSessionAgent)
+        ? { launchAgent: item.data.agentSessionAgent }
         : {})
     }
     return (

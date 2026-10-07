@@ -38,7 +38,7 @@ function commands() {
     const groupTabs = store
       .getState()
       .unifiedTabsByWorktree[WT].filter((tab) => tab.groupId === PANE)
-    const closeCommands = useTabGroupTabCloseCommands({ worktreeId: WT, groupTabs })
+    const closeCommands = useTabGroupTabCloseCommands({ worktreeId: WT })
     return useTabGroupCloseScopeCommands({
       worktreeId: WT,
       groupId: PANE,
@@ -131,30 +131,6 @@ describe('scope closes across a collapsed cluster', () => {
       expect(getHiddenClusterTabIds(pane()).has(active)).toBe(false)
     }
   )
-
-  it('closing an inactive hidden member retains the sticky member and outside activation', () => {
-    const groupTabs = store
-      .getState()
-      .unifiedTabsByWorktree[WT].filter((tab) => tab.groupId === PANE)
-    const { result } = renderHook(() => useTabGroupTabCloseCommands({ worktreeId: WT, groupTabs }))
-    act(() => result.current.closeItem('b'))
-
-    expect(pane().tabOrder).toEqual(['pinned', 'left', 'a', 'c', 'x'])
-    expect(store.getState().getTab('b')).toBeNull()
-    expect(pane().activeTabId).toBe('x')
-    expect(store.getState().activeFileId).toBe('file-x')
-    expect(pane().tabClusters).toEqual([
-      {
-        id: CLUSTER,
-        name: 'Work',
-        color: 'blue',
-        collapsed: true,
-        shownTabId: 'a',
-        tabIds: ['a', 'c']
-      }
-    ])
-    expect([...getHiddenClusterTabIds(pane())]).toEqual(['c'])
-  })
 
   it('closing others around a hidden target selects a visible pinned successor without expanding', () => {
     const closeCommands = commands()

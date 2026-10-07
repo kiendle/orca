@@ -16,6 +16,7 @@ import {
 import { structuredAgentSessionTabId } from '../../../../../shared/structured-agent-session-projection'
 import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-focus-intent'
 import { pickTabCloseSuccessor } from '../../../../../shared/tab-close-successor'
+import { ownsGlobalSelection } from '../../global-selection-owner'
 import {
   structuredAgentSessionFocusOwner,
   structuredAgentSessionTargetForTab
@@ -74,6 +75,7 @@ export function createTabsCloseActions(
           console.warn('[structured-agent-session] close found no owning host', tab.entityId)
         }
         get().clearNativeChatLaunchDraft(structuredAgentSessionTabId(tab.entityId))
+        // The unsent draft stays: it belongs to the conversation, which can be reopened from history.
       }
       const nextActiveTabId =
         group.activeTabId === tabId
@@ -169,7 +171,7 @@ export function createTabsCloseActions(
                 }
               }
             : {}),
-          ...(!shouldDeactivateWorktree && current.activeWorktreeId === worktreeId
+          ...(!shouldDeactivateWorktree && ownsGlobalSelection(current, worktreeId)
             ? buildActiveSurfacePatch(
                 {
                   ...current,

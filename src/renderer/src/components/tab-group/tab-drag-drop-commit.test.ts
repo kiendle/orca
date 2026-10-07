@@ -4,7 +4,6 @@ import type { StoreApi, UseBoundStore } from 'zustand'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { TabCluster } from '../../../../shared/tab-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'
 import {
@@ -282,35 +281,54 @@ describe('tab cluster drag commits', () => {
     expect(finishDrag.mock.calls).toEqual([[false, chip()]])
   })
 
-  it('routes a local chip edge drop to a split instead of a pane-body move', () => {
-    const { moveTabCluster, dropUnifiedTab, moveTabsInStrip, finishDrag } = commit(
-      event(chip(), { kind: 'pane-body', worktreeId: WT, groupId: 'source' }, 398, 300),
-      paneGeometry('source')
-    )
-    expect(moveTabCluster.mock.calls).toEqual([
-      ['source', SOURCE_CLUSTER.id, { groupId: 'source', splitDirection: 'right' }]
-    ])
-    expect(dropUnifiedTab).not.toHaveBeenCalled()
-    expect(moveTabsInStrip).not.toHaveBeenCalled()
-    expect(mirrorWebRuntimeTabMove).not.toHaveBeenCalled()
-    expect(finishDrag.mock.calls).toEqual([[false, undefined]])
-  })
+  it.each([WT, FLOATING_TERMINAL_WORKTREE_ID])(
+    'routes a local chip edge drop to a split in %s instead of a pane-body move',
+    (worktreeId) => {
+      seedDragPanes(worktreeId)
+      const { moveTabCluster, dropUnifiedTab, moveTabsInStrip, finishDrag } = commit(
+        event(
+          { ...chip(), worktreeId },
+          { kind: 'pane-body', worktreeId, groupId: 'source' },
+          398,
+          300
+        ),
+        paneGeometry('source'),
+        worktreeId
+      )
+      expect(moveTabCluster.mock.calls).toEqual([
+        ['source', SOURCE_CLUSTER.id, { groupId: 'source', splitDirection: 'right' }]
+      ])
+      expect(dropUnifiedTab).not.toHaveBeenCalled()
+      expect(moveTabsInStrip).not.toHaveBeenCalled()
+      expect(mirrorWebRuntimeTabMove).not.toHaveBeenCalled()
+      expect(finishDrag.mock.calls).toEqual([[false, undefined]])
+      const groups = store.getState().groupsByWorktree[worktreeId]
+      const splitGroup = groups.find((group) => group.id !== 'source' && group.id !== 'target')
+      expect(groups).toHaveLength(3)
+      expect(groups.find((group) => group.id === 'source')?.tabOrder).toEqual(['s-tail'])
+      expect(splitGroup).toMatchObject({
+        tabOrder: SOURCE_CLUSTER.tabIds,
+        tabClusters: [SOURCE_CLUSTER]
+      })
+      expect(store.getState().layoutByWorktree[worktreeId]).toMatchObject({
+        type: 'split',
+        direction: 'horizontal',
+        first: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', groupId: 'source' },
+          second: { type: 'leaf', groupId: splitGroup?.id }
+        },
+        second: { type: 'leaf', groupId: 'target' }
+      })
+    }
+  )
 
-  it.each<{ name: string; worktreeId: string; executionHostId: ExecutionHostId }>([
-    { name: 'remote', worktreeId: WT, executionHostId: 'runtime:remote' },
-    { name: 'floating', worktreeId: FLOATING_TERMINAL_WORKTREE_ID, executionHostId: 'local' }
-  ])('cancels $name chip splits without falling through to a body move', (testCase) => {
-    seedDragPanes(testCase.worktreeId)
-    store.setState({ activeWorkspaceExecutionHostId: testCase.executionHostId })
+  it('cancels remote chip splits without falling through to a body move', () => {
+    store.setState({ activeWorkspaceExecutionHostId: 'runtime:remote' })
     const { moveTabCluster, dropUnifiedTab, moveTabsInStrip, finishDrag } = commit(
-      event(
-        { ...chip(), worktreeId: testCase.worktreeId },
-        { kind: 'pane-body', worktreeId: testCase.worktreeId, groupId: 'target' },
-        398,
-        300
-      ),
-      paneGeometry('target'),
-      testCase.worktreeId
+      event(chip(), { kind: 'pane-body', worktreeId: WT, groupId: 'target' }, 398, 300),
+      paneGeometry('target')
     )
     expect(moveTabCluster).not.toHaveBeenCalled()
     expect(dropUnifiedTab).not.toHaveBeenCalled()

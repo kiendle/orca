@@ -48,7 +48,7 @@ describe('local cluster split availability', () => {
     ).toBe('remote-server')
   })
 
-  it('rejects new splits in the single-pane floating strip', () => {
+  it('allows floating splits even while a remote workspace is focused', () => {
     expect(
       getTabClusterSplitBlocker(
         {
@@ -58,6 +58,6 @@ describe('local cluster split availability', () => {
         },
         FLOATING_TERMINAL_WORKTREE_ID
       )
-    ).toBe('floating-panel')
+    ).toBeNull()
   })
 })
