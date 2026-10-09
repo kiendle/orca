@@ -124,6 +124,104 @@ describe('restored editor cluster ownership', () => {
     expect(store.getState().getTab(result.fileId)?.worktreeId).toBe(TARGET)
   })
 
+  it('keeps a collapsed cluster member and its shown tab in place when its host changes', () => {
+    const store = createTestStore()
+    const ids = ['source-sibling', OLD]
+    const targetExecutionHostId = 'ssh:ssh-1'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: SOURCE, repoId: 'repo1', path: '/path/source' })]
+      },
+      openFiles: ids.map((id) =>
+        makeOpenFile({
+          id,
+          worktreeId: SOURCE,
+          filePath: id === OLD ? '/path/source/a.md' : id
+        })
+      ),
+      unifiedTabsByWorktree: {
+        [SOURCE]: ids.map((id) =>
+          makeUnifiedTab({
+            id,
+            worktreeId: SOURCE,
+            groupId: 'source-pane',
+            contentType: 'editor',
+            executionHostId: 'local'
+          })
+        )
+      },
+      activeGroupIdByWorktree: { [SOURCE]: 'source-pane' },
+      groupsByWorktree: {
+        [SOURCE]: [
+          makeTabGroup({
+            id: 'source-pane',
+            worktreeId: SOURCE,
+            activeTabId: OLD,
+            tabOrder: ids,
+            tabClusters: [
+              {
+                id: 'cluster',
+                name: 'Work',
+                color: 'blue',
+                collapsed: true,
+                tabIds: ids,
+                shownTabId: OLD
+              }
+            ]
+          })
+        ]
+      }
+    })
+    store.setState((state) => ({
+      openFiles: state.openFiles.map((file) => ({
+        ...file,
+        operationProvenance: captureEditorFileOperationProvenance(state, SOURCE, null, true)
+      })),
+      repos: state.repos.map((repo) => ({
+        ...repo,
+        connectionId: 'ssh-1',
+        executionHostId: targetExecutionHostId
+      })),
+      worktreesByRepo: {
+        repo1: state.worktreesByRepo.repo1.map((worktree) => ({
+          ...worktree,
+          hostId: targetExecutionHostId
+        }))
+      }
+    }))
+
+    const result = store.getState().reparentRestoredEditorFileOwner({
+      fileId: OLD,
+      targetWorktreeId: SOURCE,
+      targetRelativePath: 'a.md',
+      targetExecutionHostId,
+      targetRuntimeEnvironmentId: null,
+      targetOperationProvenance: captureEditorFileOperationProvenance(
+        store.getState(),
+        SOURCE,
+        null,
+        true
+      )
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error(`Owner migration failed: ${result.reason}`)
+    }
+    expect(result.fileId).not.toBe(OLD)
+    const group = store.getState().groupsByWorktree[SOURCE][0]
+    expect(group.tabOrder).toEqual(['source-sibling', result.fileId])
+    expect(group.tabClusters).toEqual([
+      {
+        id: 'cluster',
+        name: 'Work',
+        color: 'blue',
+        collapsed: true,
+        tabIds: ['source-sibling', result.fileId],
+        shownTabId: result.fileId
+      }
+    ])
+  })
+
   it('keeps the source pane on its visible MRU successor and records the visit', () => {
     const store = createTestStore()
     const ids = [OLD, 'hidden-member', 'visible-sibling']

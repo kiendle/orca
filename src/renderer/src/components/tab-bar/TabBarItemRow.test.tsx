@@ -168,7 +168,6 @@ function Strip({
     resolvedGroupId: 'group-1',
     generatedTabTitlesEnabled,
     unifiedTabByVisibleId: new Map(),
-    nativeChatEnabled: false,
     tabAgentTypesByTabId: {},
     nativeChatTabWideFallbackUnsafeTabsById: {},
     nativeChatTranscriptIsLocalReadable: false,

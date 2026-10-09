@@ -14,6 +14,7 @@ import type {
 } from '../types/restored-editor-owner'
 import { resolveRestoredEditorOwnerDestination } from './restored-editor-owner-destination'
 import { carryRestoredEditorTabClusters } from './restored-editor-tab-clusters'
+import { rekeyRestoredEditorTabsInPlace } from './restored-editor-owner-in-place'
 
 export function buildRestoredEditorOwnerTransition(
   args: RestoredEditorOwnerMigration,
@@ -178,6 +179,27 @@ export function buildRestoredEditorOwnerTransition(
       delete nextActiveGroupIdByWorktree[sourceWorktreeId]
     }
     nextActiveGroupIdByWorktree[targetWorktreeId] = targetGroupId
+    const tabState =
+      sourceWorktreeId === targetWorktreeId
+        ? rekeyRestoredEditorTabsInPlace(
+            s,
+            targetWorktreeId,
+            migrations,
+            tabIdMigration,
+            args.targetExecutionHostId
+          )
+        : {
+            activeFileIdByWorktree: nextActiveFileIdByWorktree,
+            activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
+            activeTabTypeByWorktree: {
+              ...s.activeTabTypeByWorktree,
+              [targetWorktreeId]: 'editor' as const
+            },
+            groupsByWorktree: nextGroupsByWorktree,
+            layoutByWorktree: nextLayoutByWorktree,
+            tabBarOrderByWorktree: nextTabBarOrderByWorktree,
+            unifiedTabsByWorktree: nextUnifiedTabsByWorktree
+          }
 
     assignResult({ ok: true, fileId: newFileId })
     return {
@@ -221,16 +243,7 @@ export function buildRestoredEditorOwnerTransition(
           migrations
         ),
         activeFileId: s.activeFileId ? (migrations.get(s.activeFileId) ?? s.activeFileId) : null,
-        activeFileIdByWorktree: nextActiveFileIdByWorktree,
-        activeTabTypeByWorktree: {
-          ...s.activeTabTypeByWorktree,
-          [targetWorktreeId]: 'editor'
-        },
-        unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
-        groupsByWorktree: nextGroupsByWorktree,
-        layoutByWorktree: nextLayoutByWorktree,
-        activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
-        tabBarOrderByWorktree: nextTabBarOrderByWorktree,
+        ...tabState,
         ...(s.pendingEditorReveal?.fileId && migrations.has(s.pendingEditorReveal.fileId)
           ? {
               pendingEditorReveal: {

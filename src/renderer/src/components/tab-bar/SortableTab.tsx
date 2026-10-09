@@ -63,6 +63,8 @@ type SortableTabProps = TabStripInteractionProps & {
   /** Toggle the tab between terminal and native chat view. */
   onToggleViewMode?: () => void
   canSplitTerminal?: boolean
+  /** Set only for a native chat tab: the chat session it shows. */
+  structuredSessionId?: string
 }
 
 export default function SortableTab({
@@ -93,7 +95,8 @@ export default function SortableTab({
   canToggleViewMode = false,
   isChatView = false,
   onToggleViewMode,
-  canSplitTerminal = true
+  canSplitTerminal = true,
+  structuredSessionId
 }: SortableTabProps): React.JSX.Element {
   // Why: agent-completion unread exists even with terminal-attention off; collapse both sources to one primitive so unrelated tabs don't re-render.
   const hasUnreadActivity = useAppStore((s) =>
@@ -404,6 +407,7 @@ export default function SortableTab({
         isChatView={isChatView}
         onToggleViewMode={onToggleViewMode}
         canSplitTerminal={canSplitTerminal}
+        structuredSessionId={structuredSessionId}
       />
     </>
   )

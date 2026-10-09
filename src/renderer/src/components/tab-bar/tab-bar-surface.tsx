@@ -40,7 +40,8 @@ export function renderTabBarSurface({
   tabStripNavigation,
   tabStripDragScroll,
   activeClientHostedBrowserRowId,
-  itemActions
+  itemActions,
+  surfaceRef
 }: {
   props: TabBarProps
   runtime: TabBarRuntimeModel
@@ -51,6 +52,7 @@ export function renderTabBarSurface({
   tabStripDragScroll: ReturnType<typeof useTabStripDragScrollHandlers>
   activeClientHostedBrowserRowId: string | null
   itemActions: TabBarItemActions
+  surfaceRef: (node: HTMLDivElement | null) => void
 }): React.JSX.Element {
   const {
     worktreeId,
@@ -85,7 +87,6 @@ export function renderTabBarSurface({
     handleSelectCreateMenuOption,
     launchAgentFromNewTabEntry,
     runPendingNewTabMenuFocusAfterClose,
-    clearPendingNewTabMenuFocusOnUnmount,
     queueNewActiveTerminalFocusAfterNewTabMenuClose,
     queueTerminalTabFocusAfterNewTabMenuClose,
     queueFocusAfterNewTabMenuClose,
@@ -123,12 +124,7 @@ export function renderTabBarSurface({
   let visibleItemIndex = 0
 
   return (
-    <div
-      ref={clearPendingNewTabMenuFocusOnUnmount}
-      className="flex items-stretch h-full overflow-hidden flex-1 min-w-0"
-      // Why: preload routes native OS drops by this marker — only the tab strip opens files in the editor, not terminal panes.
-      data-native-file-drop-target="editor"
-    >
+    <div ref={surfaceRef} className="flex items-stretch h-full overflow-hidden flex-1 min-w-0">
       {tabStripOverflowState.hasOverflow ? (
         <Tooltip>
           <TooltipTrigger asChild>
