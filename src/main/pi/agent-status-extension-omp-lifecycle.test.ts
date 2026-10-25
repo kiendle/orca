@@ -271,6 +271,21 @@ describe('OMP subagent settlement', () => {
     expect(postedHookNames(harness.fetchMock).at(-1)).toBe('agent_end')
   })
 
+  it('keeps OMP working while a woken child waits on its own background work', async () => {
+    const session = { isStreaming: false, hasPendingAsyncWork: () => true }
+    const harness = createAgentStatusExtensionHarness({
+      kind: 'omp',
+      ompModule: { AgentRegistry: { global: () => ({ get: () => ({ session }) }) } }
+    })
+
+    await hook(harness, 'agent_start')
+    await lifecycle(harness, 'Helper', 'started')
+    await harness.callHook('agent_end', {}, { getAsyncJobSnapshot: () => ({ running: [] }) })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(postedHookNames(harness.fetchMock)).not.toContain('agent_end')
+  })
+
   it('does not settle OMP when a child finishes mid-run', async () => {
     const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
 
