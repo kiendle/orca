@@ -14,6 +14,7 @@ export type HookContext = {
     onTerminalInput?: (handler: (data: string) => { consume?: boolean } | undefined) => () => void
   }
   isIdle?: () => boolean
+  getAsyncJobSnapshot?: () => { running: { type: string; agentId?: string; label: string }[] }
   resolvePlanReview?: (reviewId: string, choice: string) => boolean
   model?: { provider?: unknown; id?: unknown } | null
   modelRegistry?: { getAvailable: () => { provider: string; id: string }[] }
