@@ -7,15 +7,12 @@ import type { PiAgentKind } from '../../shared/pi-agent-kind'
 function getPiSessionShutdownHandlerSourceLines(): string[] {
   return [
     "  onStatus('session_shutdown', (event) => {",
+    '    clearPendingAgentEndCheck()',
     '    if (isOmpRuntime()) {',
-    '      stopOmpRegistryObserver()',
-    '      clearPendingAgentEndCheck()',
-    '      resetSubagentRoster()',
+    '      clearRunnerExitCheck()',
     '      resetPostQueue()',
-    '      lifecycleState.ownsPane = false',
     '      return',
     '    }',
-    '    clearPendingAgentEndCheck()',
     // Why: pi tears an open dialog down without resolving its promise, so no ui_prompt_end follows.
     '    piUiPromptDepth = 0',
     '    const reason = (event as { reason?: unknown } | null)?.reason',
@@ -43,26 +40,17 @@ export function getAgentStatusSessionBoundaryHandlerSourceLines(kind: PiAgentKin
   return [
     ...(kind !== 'pi'
       ? [
-          "  onStatus('session_shutdown', () => {",
-          '    stopOmpRegistryObserver()',
-          '    resetSubagentRoster()',
-          '    resetPostQueue()',
-          '    clearPendingAgentEndCheck()',
-          '    if (isOmpRuntime()) lifecycleState.ownsPane = false',
-          '  })'
+          "  pi.on('session_shutdown', () => { resetSubagentRoster(); resetPostQueue(); clearPendingAgentEndCheck() })"
         ]
       : []),
     ...(kind !== 'prime-agent'
       ? [
-          // Why: OMP replaces native session identity in-process. Observation must stop
-          // before the old run is closed; its final post keeps the old native metadata.
-          // Older runtimes retain their lifecycle-only fork/resume behavior.
-          '  const onOmpSessionChange = (name, event, ctx) => {',
+          // Why: OMP keeps this registration and bus across a switch. /new and a branch cancel the
+          // session's own jobs; fork and resume (which is also how it reloads) leave them running
+          // and reporting here.
+          '  const onOmpSessionChange = (event, ctx) => {',
           '    if (!isOmpRuntime()) return',
-          '    const observed = isOmpRegistryObserved()',
-          '    stopOmpRegistryObserver()',
-          '    clearPendingAgentEndCheck()',
-          "    if (!observed && (event?.reason === 'fork' || event?.reason === 'resume')) {",
+          "    if (event?.reason === 'fork' || event?.reason === 'resume') {",
           // Why: a resume cuts a running turn off without an agent_end.
           '      if (isTurnInFlight()) {',
           '        lifecycleState.endedRunGeneration = lifecycleState.runGeneration',
@@ -72,11 +60,9 @@ export function getAgentStatusSessionBoundaryHandlerSourceLines(kind: PiAgentKin
           '      closeOutRun()',
           '    }',
           '    updateRuntimeOmpSessionMetadata(ctx)',
-          '    updateOmpRegistryContext(ctx)',
-          '    captureOmpRootStatus(name, event, ctx)',
           '  }',
-          "  onStatus('session_switch', (event, ctx) => onOmpSessionChange('session_switch', event, ctx))",
-          "  onStatus('session_branch', (event, ctx) => onOmpSessionChange('session_branch', event, ctx))"
+          "  pi.on('session_switch', onOmpSessionChange)",
+          "  pi.on('session_branch', onOmpSessionChange)"
         ]
       : []),
     ...(kind === 'pi' ? getPiSessionShutdownHandlerSourceLines() : [])

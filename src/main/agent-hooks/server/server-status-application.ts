@@ -33,9 +33,6 @@ function resolveTurnStartedAt(
   payload: AgentHookEventPayload,
   at: number
 ): number | undefined {
-  if (isOmpSnapshotSessionReplacement(previous, payload)) {
-    return undefined
-  }
   if (
     payload.source !== undefined &&
     payload.toolAgentId === undefined &&
@@ -55,31 +52,6 @@ function resolveTurnStartedAt(
     return undefined
   }
   return previous?.turnStartedAt
-}
-
-function isOmpSnapshotSessionReplacement(
-  previous: EnrichedAgentHookEventPayload | undefined,
-  incoming: AgentHookEventPayload
-): boolean {
-  const previousSession = previous?.providerSession
-  const incomingSession = incoming.providerSession
-  if (
-    previous?.payload.agentType !== 'omp' ||
-    incoming.source !== 'omp' ||
-    incoming.payload.agentType !== 'omp' ||
-    incoming.hookEventName !== 'subagents_update' ||
-    incoming.isReplay === true ||
-    !previousSession ||
-    !incomingSession?.transcriptPath
-  ) {
-    return false
-  }
-  return (
-    previousSession.key !== incomingSession.key ||
-    previousSession.id !== incomingSession.id ||
-    (previousSession.transcriptPath !== undefined &&
-      previousSession.transcriptPath !== incomingSession.transcriptPath)
-  )
 }
 
 export abstract class AgentHookServerStatusApplication extends AgentHookServerStatusDisposition {
@@ -174,10 +146,7 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
         incomingPromptInteractionKey: payload.promptInteractionKey
       })
     const stateStartedAt =
-      previous &&
-      previous.payload.state === payload.payload.state &&
-      !commandCodeNewTurn &&
-      !isOmpSnapshotSessionReplacement(previous, payload)
+      previous && previous.payload.state === payload.payload.state && !commandCodeNewTurn
         ? previous.stateStartedAt
         : (observedAt ?? now)
     const turnStartedAt = resolveTurnStartedAt(previous, payload, observedAt ?? now)
