@@ -1,22 +1,28 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { COMPOSER_INSET_TOP } from './mobile-native-chat-composer-styles'
 
-// A card's actions touch as 44pt targets (platform floor) inside its row: Android drops touches
-// outside the parent, so the row is at least that tall and nothing overhangs it.
+// Keep 44pt targets inside the parent row because Android drops outside touches.
 const MIN_TOUCH_TARGET = 44
 const HEADER_HEIGHT = spacing.xl + spacing.sm
 const META_LINE_HEIGHT = typography.metaSize + spacing.xs
 
+const COMPOSER_TUCK = 12
+
 export const queuedMessageStyles = StyleSheet.create({
   list: {
     marginHorizontal: spacing.lg,
-    marginVertical: spacing.xs
+    marginTop: spacing.xs,
+    marginBottom: -(COMPOSER_INSET_TOP + COMPOSER_TUCK)
   },
   box: {
+    paddingBottom: COMPOSER_TUCK,
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.row,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
+    borderBottomWidth: 0,
+    borderColor: colors.composerBorder,
     overflow: 'hidden'
   },
   header: {
@@ -26,8 +32,7 @@ export const queuedMessageStyles = StyleSheet.create({
     gap: spacing.xs,
     paddingLeft: spacing.md
   },
-  // Large text: Clear all and Resume on a line of their own, under the label; at the largest sizes
-  // one button is all a small phone's line holds, so they wrap.
+  // Wrap header actions onto their own lines at large text sizes.
   headerActionsLine: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -69,7 +74,6 @@ export const queuedMessageStyles = StyleSheet.create({
     paddingVertical: spacing.sm,
     fontVariant: ['tabular-nums']
   },
-  // A long reason truncates in the space left; the count beside it never does.
   headerCaption: {
     flex: 1,
     minWidth: 0,
@@ -107,7 +111,7 @@ export const queuedMessageStyles = StyleSheet.create({
   },
   divided: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle
+    borderTopColor: colors.composerBorder
   },
   textColumn: {
     flex: 1,
@@ -145,7 +149,6 @@ export const queuedMessageStyles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     borderRadius: radii.button
   },
-  // The composer's 40pt button width; the row's last action keeps the full 44.
   iconAction: {
     minHeight: MIN_TOUCH_TARGET,
     width: 40,

@@ -1,4 +1,5 @@
 import {
+  isTerminalSnapshotForcedUnavailable,
   sendSnapshotFrames,
   serializeBudgetedMobileSnapshot
 } from './terminal-snapshot-publication'
@@ -72,7 +73,7 @@ export async function publishMultiplexInitialSnapshot(
     ...(stream.inputSessionId !== null
       ? { inputLedgerId: getTerminalInputSequenceLedger(runtime).id }
       : {}),
-    // Why: retained-tail truncation loses history, not the authoritative latest-screen fallback.
+    // Truncated retained history does not invalidate the authoritative latest-screen fallback.
     truncated: initialOutputOverflowed
   })
   sendSnapshotFrames((opcode, payload) => state.sendFrame(request.streamId, opcode, payload), {
@@ -91,9 +92,14 @@ export async function publishMultiplexInitialSnapshot(
     terminalOwner: serialized?.terminalOwner,
     oscLinks: serialized?.oscLinks,
     pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
-    data: serialized?.data ?? (read.tail.length > 0 ? `${read.tail.join('\r\n')}\r\n` : '')
+    // E2E: a forced-unavailable host retains nothing, so it has no tail to fall back on either.
+    data:
+      serialized?.data ??
+      (read.tail.length > 0 && !isTerminalSnapshotForcedUnavailable()
+        ? `${read.tail.join('\r\n')}\r\n`
+        : '')
   })
-  // Why: baseline for resize re-stream gating; the client already rewrapped to these cols via the initial snapshot replay.
+  // Seed resize re-stream columns from the initial snapshot the client already rewrapped.
   stream.lastResizeCols = serialized?.cols ?? size?.cols
   stream.buffering = false
   const pendingOutput = stream.pendingOutput.splice(0)

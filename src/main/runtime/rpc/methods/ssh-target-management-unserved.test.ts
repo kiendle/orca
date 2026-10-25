@@ -2,13 +2,12 @@ import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import { SSH_TARGET_MANAGEMENT_UNSERVED_MESSAGE } from '../../../ssh/ssh-target-registry'
+import { SSH_TARGET_MANAGEMENT_UNSERVED_MESSAGE } from '../../../ssh/targets/ssh-target-registry'
 import { SSH_METHODS } from './ssh'
 
 const target = { label: 'Build', host: 'build.internal', port: 22, username: 'ci' }
 
-// orcad registers no SSH handlers yet still advertises ssh.target-management.v1, so its methods
-// must refuse in words a released client can show as is (D3).
+// orcad advertises target-management without SSH handlers; refuse with text released clients can display (D3).
 describe('SSH target management on a host with no SSH stack', () => {
   const runtime = new OrcaRuntimeService()
   const dispatch = (method: string, params?: unknown) =>

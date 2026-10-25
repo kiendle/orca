@@ -8,10 +8,11 @@ import { isSmartSortRelevantAgentChange } from '../../../../shared/sidebar-list/
 import { recordHibernationBoundaryResolved } from '@/lib/agent-hibernation-pane-age'
 import {
   findAgentPaneWorktreeId,
+  findTabForAgentEntry,
   isAgentCompletionState
 } from './agent-status-pane-key-tab-binding'
 import { pruneMigrationUnsupportedEntries } from './agent-status-migration-unsupported-entries'
-import { sleepingRecordFromEntry } from './agent-status-sleeping-records'
+import { liveResumeRecord } from '../../../../shared/agent-resume-record-from-status'
 import { agentMainAgentVerdict } from '../../../../shared/agent-main-agent-verdict'
 
 export type AgentStatusLiveFacts = {
@@ -80,8 +81,7 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
       entry.subagents !== existing.subagents ||
       entry.children !== existing.children ||
       entry.providerSession !== existing.providerSession)
-  // A verdict moves no clock: a failure keeps a done's completion time, and a main agent that fails
-  // while its subagents keep the row working leaves the row's state and start as they were.
+  // Verdicts move no clocks: failures preserve done completion and working subagent state/start.
   const verdictChanged =
     !!existing && agentMainAgentVerdict(entry) !== agentMainAgentVerdict(existing)
   const retentionRelevantChange =
@@ -91,22 +91,14 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
     verdictChanged ||
     doneRetentionFieldsChanged
   const existingSleepingRecord = state.sleepingAgentSessionsByPaneKey[paneKey]
-  const liveRecoveryWorktreeId =
-    entry.state === 'done' && !retainsResumableRecoveryIdentity
-      ? null
-      : (entry.worktreeId ?? findAgentPaneWorktreeId(state, paneKey))
-  const liveRecoveryRecord = liveRecoveryWorktreeId
-    ? sleepingRecordFromEntry({
-        state,
-        entry: retainsResumableRecoveryIdentity
-          ? { ...entry, prompt: '', lastAssistantMessage: undefined }
-          : entry,
-        worktreeId: liveRecoveryWorktreeId,
-        capturedAt: updatedAt,
-        launchConfig: launchConfigSource,
-        origin: 'live'
-      })
-    : null
+  const liveRecoveryRecord = liveResumeRecord({
+    entry,
+    retainsResumableIdentity: retainsResumableRecoveryIdentity,
+    worktreeIdOf: () => entry.worktreeId ?? findAgentPaneWorktreeId(state, paneKey),
+    tabOf: (worktreeId) => findTabForAgentEntry(state, worktreeId, entry),
+    capturedAt: updatedAt,
+    launchConfig: launchConfigSource
+  })
   const migrationUnsupported = pruneMigrationUnsupportedEntries(
     state.migrationUnsupportedByPtyId,
     (migrationEntry) => migrationEntry.paneKey === paneKey
