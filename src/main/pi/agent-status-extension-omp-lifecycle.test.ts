@@ -11,6 +11,11 @@ function postedHookNames(fetchMock: ReturnType<typeof vi.fn>): string[] {
   )
 }
 
+function lastSubagentIds(fetchMock: ReturnType<typeof vi.fn>): string[] {
+  const body = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body))
+  return (body.payload.subagents ?? []).map((subagent: { id: string }) => subagent.id)
+}
+
 const OMP_RUNTIME_CASES = [
   ['configured OMP', { kind: 'omp' as const }],
   ['title-routed OMP', { kind: 'pi' as const, title: 'omp' }],
@@ -255,20 +260,30 @@ describe('OMP subagent settlement', () => {
     expect(postedHookNames(harness.fetchMock).at(-1)).toBe('agent_end')
   })
 
-  it.each([
-    ['agentId', { type: 'task', agentId: 'Helper', label: 'Helper' }],
-    ['label only', { type: 'task', label: 'Helper' }]
-  ])('keeps OMP working while a task job by %s still runs', async (_name, job) => {
+  it('drops only the children OMP no longer runs', async () => {
     const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
+    const job = { type: 'task', agentId: 'Helper', label: 'Helper' }
+
+    await hook(harness, 'agent_start')
+    await lifecycle(harness, 'Orphan', 'started')
+    await lifecycle(harness, 'Helper', 'started')
+    await harness.callHook('agent_end', {}, { getAsyncJobSnapshot: () => ({ running: [job] }) })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(postedHookNames(harness.fetchMock)).not.toContain('agent_end')
+    expect(lastSubagentIds(harness.fetchMock)).toEqual(['Helper'])
+  })
+
+  it('keeps every child when an older OMP snapshot cannot name its task jobs', async () => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
+    const job = { type: 'task', label: 'Helper-b1' }
 
     await hook(harness, 'agent_start')
     await lifecycle(harness, 'Helper', 'started')
     await harness.callHook('agent_end', {}, { getAsyncJobSnapshot: () => ({ running: [job] }) })
     await vi.advanceTimersByTimeAsync(0)
-    expect(postedHookNames(harness.fetchMock)).not.toContain('agent_end')
 
-    await lifecycle(harness, 'Helper', 'completed')
-    expect(postedHookNames(harness.fetchMock).at(-1)).toBe('agent_end')
+    expect(postedHookNames(harness.fetchMock)).not.toContain('agent_end')
   })
 
   it('keeps OMP working while a woken child waits on its own background work', async () => {

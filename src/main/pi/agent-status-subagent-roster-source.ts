@@ -116,10 +116,14 @@ export function getPiSubagentRosterEventSourceLines(): string[] {
     '  function forgetFinishedOmpSubagents(ctx): boolean {',
     '    const live = new Set<unknown>()',
     '    try {',
-    "      const running = typeof ctx?.getAsyncJobSnapshot === 'function' ? ctx.getAsyncJobSnapshot()?.running : undefined",
+    '      const running = ctx?.getAsyncJobSnapshot?.()?.running',
     '      if (!Array.isArray(running)) return false',
-    // Task jobs are labelled with their agent id on builds whose snapshot omits agentId.
-    "      for (const job of running) if (job?.type === 'task') live.add(job.agentId ?? job.label)",
+    // Older snapshots omit agentId, and workpool batch labels are not child ids.
+    '      for (const job of running) {',
+    "        if (job?.type !== 'task') continue",
+    "        if (typeof job.agentId !== 'string') return false",
+    '        live.add(job.agentId)',
+    '      }',
     // Woken or resumed children run outside the root's jobs.
     '      const registry = pi.pi?.AgentRegistry?.global?.()',
     '      for (const id of lifecycleState.active) {',
@@ -130,7 +134,7 @@ export function getPiSubagentRosterEventSourceLines(): string[] {
     '      return false',
     '    }',
     '    let wasVisible = false',
-    '    for (const id of [...lifecycleState.active]) {',
+    '    for (const id of lifecycleState.active) {',
     '      if (live.has(id)) continue',
     '      wasVisible ||= isVisibleSubagent(lifecycleState, id)',
     '      forgetSubagent(id)',
