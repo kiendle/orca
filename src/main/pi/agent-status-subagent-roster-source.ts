@@ -112,6 +112,27 @@ export function getPiSubagentRosterEventSourceLines(): string[] {
     '  function postSubagentsUpdate(): void {',
     "    if (!hasQueuedPost()) post('subagents_update')",
     '  }',
+    // OMP lifecycle frames can invert or lose a terminal; its job list and registry know which children still run.
+    '  function forgetFinishedOmpSubagents(ctx): boolean {',
+    '    let running: unknown',
+    '    let registry: { get?: (id: string) => { session?: { isStreaming?: boolean } } | undefined } | undefined',
+    '    try {',
+    "      running = typeof ctx?.getAsyncJobSnapshot === 'function' ? ctx.getAsyncJobSnapshot()?.running : undefined",
+    '      registry = pi.pi?.AgentRegistry?.global?.()',
+    '    } catch {',
+    '      return false',
+    '    }',
+    '    if (!Array.isArray(running)) return false',
+    // Task jobs are labelled with their agent id on builds whose snapshot omits agentId.
+    "    const live = new Set(running.filter((job) => job?.type === 'task').map((job) => job.agentId ?? job.label))",
+    '    let wasVisible = false',
+    '    for (const id of [...lifecycleState.active]) {',
+    '      if (live.has(id) || registry?.get?.(id)?.session?.isStreaming === true) continue',
+    '      wasVisible ||= isVisibleSubagent(lifecycleState, id)',
+    '      forgetSubagent(id)',
+    '    }',
+    '    return wasVisible',
+    '  }',
     "  const readLabel = (value: unknown): string | undefined => typeof value === 'string' && value.trim() ? value : undefined",
     '  lifecycleState.onEvent = (event: unknown, forcedStatus?: string): void => {',
     "    if (!event || typeof event !== 'object') return",
@@ -122,8 +143,8 @@ export function getPiSubagentRosterEventSourceLines(): string[] {
     '    if (isOmpRuntime() && !lifecycleState.ownsPane) return',
     "    if (status === 'started') {",
     '      lifecycleState.active.add(id)',
-    // Use labels/step keys because pi-subagents redacts task prompts; keys distinguish same-agent siblings.
-    "      if (!subagentDetails.has(id)) subagentDetails.set(id, { agentType: readLabel(record.agent), description: readLabel(record.description) ?? readLabel(record.workflowKey), startedAt: Date.now(), workflow: record.mode === 'workflow', parent: readLabel(record.parentWorkflowRunId), registration })",
+    // Use labels/step keys because pi-subagents redacts task prompts; keys and OMP's named ids distinguish same-agent siblings.
+    "      if (!subagentDetails.has(id)) subagentDetails.set(id, { agentType: readLabel(record.agent), description: readLabel(record.description) ?? readLabel(record.workflowKey) ?? (isOmpRuntime() ? id : undefined), startedAt: Date.now(), workflow: record.mode === 'workflow', parent: readLabel(record.parentWorkflowRunId), registration })",
     // Pi reopens only posted completions; earlier children must preserve the idle check.
     '      if (!isTurnInFlight() && (isOmpRuntime() || lifecycleState.runGeneration === 0 || lifecycleState.completionPostedGeneration === lifecycleState.runGeneration)) {',
     '        lifecycleState.waiting = true',
