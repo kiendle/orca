@@ -249,8 +249,13 @@ describe('OMP subagent settlement', () => {
     }
   )
 
+  // OMP hands extensions its package exports, including the process-wide agent registry.
+  function ompModule(session?: { isStreaming: boolean; hasPendingAsyncWork: () => boolean }) {
+    return { AgentRegistry: { global: () => ({ get: () => (session ? { session } : undefined) }) } }
+  }
+
   it('settles OMP when a child it no longer runs never reported finishing', async () => {
-    const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
+    const harness = createAgentStatusExtensionHarness({ kind: 'omp', ompModule: ompModule() })
 
     await hook(harness, 'agent_start')
     await lifecycle(harness, 'Orphan', 'started')
@@ -261,7 +266,7 @@ describe('OMP subagent settlement', () => {
   })
 
   it('drops only the children OMP no longer runs', async () => {
-    const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
+    const harness = createAgentStatusExtensionHarness({ kind: 'omp', ompModule: ompModule() })
     const job = { type: 'task', agentId: 'Helper', label: 'Helper' }
 
     await hook(harness, 'agent_start')
@@ -274,13 +279,15 @@ describe('OMP subagent settlement', () => {
     expect(lastSubagentIds(harness.fetchMock)).toEqual(['Helper'])
   })
 
-  it('keeps every child when an older OMP snapshot cannot name its task jobs', async () => {
-    const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
-    const job = { type: 'task', label: 'Helper-b1' }
+  it.each([
+    ['the job snapshot cannot name task jobs', [{ type: 'task', label: 'Helper-b1' }], ompModule()],
+    ['no agent registry is exposed', [], undefined]
+  ])('keeps every child when %s', async (_name, running, module) => {
+    const harness = createAgentStatusExtensionHarness({ kind: 'omp', ompModule: module })
 
     await hook(harness, 'agent_start')
     await lifecycle(harness, 'Helper', 'started')
-    await harness.callHook('agent_end', {}, { getAsyncJobSnapshot: () => ({ running: [job] }) })
+    await harness.callHook('agent_end', {}, { getAsyncJobSnapshot: () => ({ running }) })
     await vi.advanceTimersByTimeAsync(0)
 
     expect(postedHookNames(harness.fetchMock)).not.toContain('agent_end')
@@ -290,7 +297,7 @@ describe('OMP subagent settlement', () => {
     const session = { isStreaming: false, hasPendingAsyncWork: () => true }
     const harness = createAgentStatusExtensionHarness({
       kind: 'omp',
-      ompModule: { AgentRegistry: { global: () => ({ get: () => ({ session }) }) } }
+      ompModule: ompModule(session)
     })
 
     await hook(harness, 'agent_start')

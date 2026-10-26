@@ -126,8 +126,9 @@ export function getPiSubagentRosterEventSourceLines(): string[] {
     '      }',
     // Woken or resumed children run outside the root's jobs.
     '      const registry = pi.pi?.AgentRegistry?.global?.()',
+    "      if (typeof registry?.get !== 'function') return false",
     '      for (const id of lifecycleState.active) {',
-    '        const session = registry?.get?.(id)?.session',
+    '        const session = registry.get(id)?.session',
     '        if (session?.isStreaming === true || session?.hasPendingAsyncWork?.() === true) live.add(id)',
     '      }',
     '    } catch {',
