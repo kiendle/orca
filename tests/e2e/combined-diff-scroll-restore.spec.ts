@@ -548,19 +548,28 @@ test.describe('Combined diff scroll restore', () => {
     await section.evaluate((element) => {
       const container = element.closest<HTMLElement>('.combined-diff-scroll-container')!
       const body = element.querySelector('[data-diff-editor-viewport]')!.parentElement!
+      const visibleBodyHeight = Math.min(400, container.clientHeight / 2)
       container.scrollTop +=
-        body.getBoundingClientRect().top - container.getBoundingClientRect().top - 240
+        body.getBoundingClientRect().top -
+        container.getBoundingClientRect().top -
+        (container.clientHeight - visibleBodyHeight)
     })
     const modifiedLines = section.locator('.editor.modified .view-line')
     await expect(modifiedLines.first()).toBeInViewport()
     await modifiedLines.first().click({ position: { x: 30, y: 8 } })
+    await expect(modifiedLines.filter({ hasText: 'changed_1_35' })).not.toBeInViewport()
     await orcaPage.keyboard.press('ControlOrMeta+f')
     await orcaPage.getByRole('textbox', { name: 'Find', exact: true }).fill('changed_1_35')
     await expect
       .poll(() =>
         modifiedLines.filter({ hasText: 'changed_1_35' }).evaluate((element) => {
-          const container = element.closest('.combined-diff-scroll-container')!
-          return element.getBoundingClientRect().bottom <= container.getBoundingClientRect().bottom
+          const container = element.closest('.combined-diff-scroll-container')
+          if (!element.isConnected || !container) {
+            return false
+          }
+          const viewportTop = container.getBoundingClientRect().top + container.clientTop
+          const { top, bottom } = element.getBoundingClientRect()
+          return top >= viewportTop && bottom <= viewportTop + container.clientHeight
         })
       )
       .toBe(true)
