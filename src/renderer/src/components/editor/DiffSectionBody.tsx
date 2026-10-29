@@ -19,6 +19,7 @@ import {
 } from './diff-editor-word-wrap-options'
 import { monacoFindOptions } from './monaco-find-options'
 import { installDiffEditorShiftWheelScroll } from './diff-editor-shift-wheel-scroll'
+import { useDiffSectionViewport } from './use-diff-section-viewport'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -64,6 +65,7 @@ export function DiffSectionBody({
   onMount
 }: DiffSectionBodyProps): React.JSX.Element {
   const renderLimit = section.largeDiffRenderLimit?.limited ? section.largeDiffRenderLimit : null
+  const viewport = useDiffSectionViewport()
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
   const wordWrapOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
   const wordWrapMountFrameRef = useRef(0)
@@ -73,6 +75,7 @@ export function DiffSectionBody({
   }, [diffWordWrap])
   const handleEditorMount: DiffOnMount = (diffEditor, monaco) => {
     diffEditorRef.current = diffEditor
+    viewport.mount(diffEditor)
     const cleanupShiftWheelScroll = installDiffEditorShiftWheelScroll(diffEditor)
     diffEditor.getModifiedEditor().onDidDispose(() => {
       cleanupShiftWheelScroll()
@@ -205,39 +208,46 @@ export function DiffSectionBody({
           }
         />
       ) : (
-        <DiffEditor
-          height="100%"
-          language={language}
-          original={section.originalContent}
-          modified={section.modifiedContent}
-          theme={isDark ? 'vs-dark' : 'vs'}
-          onMount={handleEditorMount}
-          // The React wrapper may dispose models before widgets; retain them through teardown and dispose unattached models next tick.
-          originalModelPath={`${modelPathBase}:original`}
-          modifiedModelPath={`${modelPathBase}:modified`}
-          keepCurrentOriginalModel
-          keepCurrentModifiedModel
-          options={{
-            dropIntoEditor: { enabled: false },
-            // Native EditContext focus scrolls its hidden input into the combined viewport.
-            editContext: false,
-            readOnly: !isEditable,
-            originalEditable: false,
-            renderSideBySide: sideBySide,
-            minimap: { enabled: false },
-            scrollBeyondLastLine: false,
-            fontSize: diffEditorFontSize,
-            fontFamily: editorFontFamily || 'monospace',
-            lineNumbers: 'on',
-            ...buildDiffEditorWordWrapOptions(diffWordWrap),
-            ...buildDiffEditorWhitespaceOptions(diffShowWhitespace),
-            automaticLayout: true,
-            renderOverviewRuler: false,
-            scrollbar: combinedDiffSectionScrollbarOptions,
-            hideUnchangedRegions: { enabled: true },
-            find: monacoFindOptions
-          }}
-        />
+        <div
+          ref={viewport.ref}
+          data-diff-editor-viewport
+          className="sticky top-0"
+          style={{ height: 0 }}
+        >
+          <DiffEditor
+            height="100%"
+            language={language}
+            original={section.originalContent}
+            modified={section.modifiedContent}
+            theme={isDark ? 'vs-dark' : 'vs'}
+            onMount={handleEditorMount}
+            // The React wrapper may dispose models before widgets; retain them through teardown and dispose unattached models next tick.
+            originalModelPath={`${modelPathBase}:original`}
+            modifiedModelPath={`${modelPathBase}:modified`}
+            keepCurrentOriginalModel
+            keepCurrentModifiedModel
+            options={{
+              dropIntoEditor: { enabled: false },
+              // Native EditContext focus scrolls its hidden input into the combined viewport.
+              editContext: false,
+              readOnly: !isEditable,
+              originalEditable: false,
+              renderSideBySide: sideBySide,
+              minimap: { enabled: false },
+              scrollBeyondLastLine: false,
+              fontSize: diffEditorFontSize,
+              fontFamily: editorFontFamily || 'monospace',
+              lineNumbers: 'on',
+              ...buildDiffEditorWordWrapOptions(diffWordWrap),
+              ...buildDiffEditorWhitespaceOptions(diffShowWhitespace),
+              automaticLayout: false,
+              renderOverviewRuler: false,
+              scrollbar: combinedDiffSectionScrollbarOptions,
+              hideUnchangedRegions: { enabled: true },
+              find: monacoFindOptions
+            }}
+          />
+        </div>
       )}
     </div>
   )
