@@ -221,12 +221,7 @@ export function DiffSectionBody({
           }
         />
       ) : (
-        <div
-          ref={viewport.ref}
-          data-diff-editor-viewport
-          className="sticky top-0"
-          style={{ height: 0 }}
-        >
+        <div ref={viewport.ref} data-diff-editor-viewport className="sticky" style={{ height: 0 }}>
           <DiffEditor
             height="100%"
             language={language}

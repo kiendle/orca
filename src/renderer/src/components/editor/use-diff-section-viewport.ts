@@ -3,9 +3,11 @@ import type { editor, IScrollEvent } from 'monaco-editor'
 
 type DiffViewport = {
   body: HTMLElement
+  header: HTMLElement | null
   element: HTMLDivElement
   editor?: editor.IStandaloneDiffEditor
   height: number
+  headerHeight: number
   width: number
   top: number
   layout?: { width: number; height: number }
@@ -65,7 +67,9 @@ class DiffViewportCoordinator {
     if (rect.height <= 0) {
       return
     }
-    viewport.height = Math.floor(Math.min(height, rect.height))
+    viewport.headerHeight = viewport.header?.getBoundingClientRect().height ?? 0
+    const contentTop = containerTop + viewport.headerHeight
+    viewport.height = Math.floor(Math.min(Math.max(0, height - viewport.headerHeight), rect.height))
     viewport.width = Math.floor(rect.width)
     viewport.scrollTop = Math.max(
       0,
@@ -74,11 +78,11 @@ class DiffViewportCoordinator {
         viewport.editor
           ? viewport.editor.getModifiedEditor().getScrollHeight() - viewport.height
           : Infinity,
-        containerTop - rect.top
+        contentTop - rect.top
       )
     )
     viewport.top =
-      Math.max(rect.top, Math.min(containerTop, rect.bottom - viewport.height)) - containerTop
+      Math.max(rect.top, Math.min(contentTop, rect.bottom - viewport.height)) - contentTop
   }
 
   private render(viewport: DiffViewport): void {
@@ -86,6 +90,10 @@ class DiffViewportCoordinator {
       return
     }
     const height = `${viewport.height}px`
+    const top = `${viewport.headerHeight}px`
+    if (viewport.element.style.top !== top) {
+      viewport.element.style.top = top
+    }
     if (viewport.element.style.height !== height) {
       viewport.element.style.height = height
     }
@@ -117,8 +125,10 @@ class DiffViewportCoordinator {
   add(element: HTMLDivElement, body: HTMLElement): DiffViewportConnection {
     const viewport: DiffViewport = {
       body,
+      header: body.parentElement?.querySelector<HTMLElement>('[data-diff-section-header]') ?? null,
       element,
       height: 0,
+      headerHeight: 0,
       width: 0,
       top: 0,
       scrollTop: 0,
@@ -126,6 +136,9 @@ class DiffViewportCoordinator {
     }
     this.viewports.add(viewport)
     this.observer.observe(body)
+    if (viewport.header) {
+      this.observer.observe(viewport.header)
+    }
     this.measure(
       viewport,
       this.container.getBoundingClientRect().top + this.container.clientTop,
@@ -165,7 +178,10 @@ class DiffViewportCoordinator {
             viewport.top -
             viewport.scrollTop
           const bottom = top + codeEditor.getLineHeightForPosition(position)
-          const delta = top < 0 ? top : Math.max(0, bottom - this.container.clientHeight)
+          const delta =
+            top < 0
+              ? top
+              : Math.max(0, bottom - (this.container.clientHeight - viewport.headerHeight))
           if (Math.abs(delta) >= 1) {
             this.container.scrollTop += delta
           }
@@ -192,6 +208,9 @@ class DiffViewportCoordinator {
         }
         subscriptions = []
         this.observer.unobserve(body)
+        if (viewport.header) {
+          this.observer.unobserve(viewport.header)
+        }
         this.viewports.delete(viewport)
         if (this.viewports.size === 0) {
           if (this.frame !== null) {
@@ -244,9 +263,14 @@ export function scrollDiffEditorTo(
     codeEditor.setScrollTop(scrollTop)
     return
   }
+  const headerHeight =
+    body.parentElement
+      ?.querySelector<HTMLElement>('[data-diff-section-header]')
+      ?.getBoundingClientRect().height ?? 0
   container.scrollTop +=
     body.getBoundingClientRect().top -
     container.getBoundingClientRect().top -
-    container.clientTop +
+    container.clientTop -
+    headerHeight +
     scrollTop
 }

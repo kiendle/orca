@@ -574,4 +574,49 @@ test.describe('Combined diff scroll restore', () => {
       )
       .toBe(true)
   })
+
+  test('keeps Find controls and upward cursor navigation below the sticky file header', async ({
+    orcaPage,
+    registerPostElectronShutdownCleanup
+  }) => {
+    await waitForSessionReady(orcaPage)
+    const fixture = createCombinedDiffScrollRepo()
+    registerPostElectronShutdownCleanup(async () => {
+      rmSync(fixture.repoPath, { recursive: true, force: true })
+    })
+    const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
+    await openCombinedDiff(orcaPage, worktreeId, fixture.repoPath)
+    const section = orcaPage.locator('[data-combined-diff-section-row][data-index="0"]')
+    const modifiedLines = section.locator('.editor.modified .view-line')
+    await modifiedLines.filter({ hasText: 'changed_0_40' }).click({ position: { x: 30, y: 8 } })
+    await orcaPage.locator('.combined-diff-scroll-container').evaluate((element) => {
+      element.scrollTop = 400
+    })
+
+    const isUnobscured = (element: Element): boolean => {
+      const row = element.closest('[data-combined-diff-section-row]')
+      const header = row?.querySelector('.sticky')
+      const container = row?.closest('.combined-diff-scroll-container')
+      if (!element.isConnected || !header || !container) {
+        return false
+      }
+      const { top, bottom } = element.getBoundingClientRect()
+      const viewportTop = container.getBoundingClientRect().top + container.clientTop
+      return (
+        top >= header.getBoundingClientRect().bottom &&
+        bottom <= viewportTop + container.clientHeight
+      )
+    }
+
+    await orcaPage.keyboard.press('ControlOrMeta+f')
+    const findWidget = section.locator('.find-widget:visible')
+    await expect.poll(() => findWidget.evaluate(isUnobscured)).toBe(true)
+    await orcaPage.keyboard.press('Escape')
+    for (let index = 0; index < 40; index++) {
+      await orcaPage.keyboard.press('ArrowUp')
+    }
+    await expect
+      .poll(() => modifiedLines.filter({ hasText: 'changed_0_0' }).evaluate(isUnobscured))
+      .toBe(true)
+  })
 })
